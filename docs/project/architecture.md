@@ -12,7 +12,8 @@ flowchart LR
 | --- | --- | --- |
 | UI | `src/app.rs` ほか | 画面描画・入力。Tauri コマンドを `invoke` で呼ぶ |
 | コマンド | `src-tauri/src/lib.rs` | `#[tauri::command]` でフロントに API を公開 |
-| 永続化 | `src-tauri/` | rusqlite で SQLite を読み書き |
+| 永続化 | `src-tauri/src/db.rs` | rusqlite で SQLite を読み書き。ファイルは `%APPDATA%\com.hikou.x-clone\x-clone.sqlite`（Q-012） |
+| AI | `src-tauri/src/llm/` | `LlmProvider` トレイトの裏で Claude API を呼ぶ（ADR-002） |
 | backend | `backend/` | 未使用（将来のサーバー用途を想定） |
 
 ## ビルドの流れ

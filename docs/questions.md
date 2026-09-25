@@ -52,3 +52,5 @@
 | Q-008 | 依存クレートの追加 | A: reqwest / tokio / async-trait / chrono / thiserror をすべて承認 | 2026-09-25 | [001](specs/001-post-and-classify.md) |
 | Q-009 | 安全フィルタで断られたときの自動再試行 | A: 有効にする（対象は `claude-opus-5` 使用時。Haiku 4.5 では送らない） | 2026-09-25 | [001](specs/001-post-and-classify.md) |
 | Q-010 | `.env` 読み込み用クレート | `dotenvy` を追加する | 2026-09-25 | [001](specs/001-post-and-classify.md) |
+| Q-011 | 既存の X クローン機能（ログイン・ユーザー・いいね・リツイート・プロフィール・デモデータ）の扱い | 削除して仕様001の機能に置き換える。CSS の見た目は流用してよい | 2026-09-25 | [001](specs/001-post-and-classify.md), [plan 001](plans/001-post-and-classify.md) |
+| Q-012 | SQLite の DB ファイルの場所 | OS のアプリデータ用フォルダ（`%APPDATA%\com.hikou.x-clone\`）に新規作成する。古い `src-tauri/.x_clone.sqlite` は使わない | 2026-09-25 | [001](specs/001-post-and-classify.md), [architecture](project/architecture.md) |

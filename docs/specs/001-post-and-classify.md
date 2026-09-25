@@ -1,10 +1,10 @@
 ---
 id: "001"
 title: ポスト投稿と自動分類・タスク化
-status: review # draft | review | approved | done | rejected（approved/done は人のみ変更可）
+status: approved # draft | review | approved | done | rejected（approved/done は人のみ変更可）
 created: 2026-09-25
 updated: 2026-09-25
-approved_by: # 承認した人の名前（人が記入）
+approved_by: hikou # 2026-09-25 会話上で承認（AI が代理記入）
 ---
 
 # 001: ポスト投稿と自動分類・タスク化
@@ -94,6 +94,10 @@ approved_by: # 承認した人の名前（人が記入）
 ## データ・API
 
 ### DB
+
+- DB ファイルは OS のアプリデータ用フォルダ（Windows では `%APPDATA%\com.hikou.x-clone\x-clone.sqlite`）に作る（Q-012）。
+- 既存の X クローン用テーブル（users / likes / retweets と古い posts）は使わない。古い DB ファイルは読み込まない。
+- 接続時に `PRAGMA foreign_keys = ON` を有効にする（タスクの `ON DELETE CASCADE` を効かせるため）。
 
 ```sql
 CREATE TABLE posts (
@@ -208,6 +212,7 @@ Claude の実装（`ClaudeProvider`）:
 
 ## スコープ外
 
+- 既存の X クローン機能（ログイン・ユーザー・いいね・リツイート・プロフィール・デモデータ）は**削除する**（Q-011）
 - 分類結果をユーザーが手で直すこと（後続の仕様）
 - タスクの完了・編集・削除
 - 可視化（F3）、AI リプライ（F4）、関連タスクの派生（F5）
@@ -232,3 +237,5 @@ Claude の実装（`ClaudeProvider`）:
 | --- | --- | --- |
 | 2026-09-25 | 初版 | AI |
 | 2026-09-25 | Q-004〜Q-010 の回答を反映（.env、280文字、Haiku 4.5、モデル別パラメータ、dotenvy） | AI |
+| 2026-09-25 | 承認（approved） | hikou |
+| 2026-09-25 | 計画中に見つかった食い違いについて Q-011（既存機能の削除）・Q-012（DB の場所）の決定を追記 | AI（hikou 決定） |
