@@ -59,7 +59,7 @@ src/
   - `styles.css` から不要なスタイル（ログイン・プロフィール・トレンド）を削除
   - 確認: `cargo check --workspace` と `trunk build` が通る
 
-- [ ] **T2: 依存クレートの追加と DB 層**（FR-2, FR-7 / AC-8）
+- [x] **T2: 依存クレートの追加と DB 層**（FR-2, FR-7 / AC-8）
   - `src-tauri/Cargo.toml` に reqwest（`json`, `rustls-tls`、default-features 無効）/ tokio / async-trait / chrono（`serde`）/ thiserror / dotenvy を追加（Q-008, Q-010）
   - `error.rs`, `models.rs`, `db.rs`: スキーマ作成、`PRAGMA foreign_keys = ON`、`insert_post` / `list_timeline(limit, before_id)` / `replace_tasks(post_id, tasks)` / `set_classify_status`
   - 単体テスト（インメモリ DB）: 保存・新しい順の取得・ページング・タスクの置き換え・ポスト削除でタスクも消えること
@@ -118,3 +118,4 @@ src/
 | --- | --- | --- |
 | 2026-09-25 | 計画作成 | 既存コードとの食い違いを Q-011 / Q-012 で解消 |
 | 2026-09-25 | T1 | 既存機能を削除し、モジュールの空ファイルと最小画面を作成。clippy・trunk build・test 通過 |
+| 2026-09-25 | T2 | reqwest 0.13 では機能名が `rustls-tls` から `rustls` に変わったのでそれを使用。DB 型で必要なため `kind.rs` と文字数チェックも前倒しで実装。テスト13件通過。T5 までは `dead_code` を一時的に許可 |

@@ -1,3 +1,6 @@
+// TODO(001-T5): コマンドから使うようになったら dead_code の許可を外す
+#![allow(dead_code)]
+
 mod classify;
 mod commands;
 mod config;
