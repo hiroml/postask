@@ -1,0 +1,17 @@
+# ビルド成果物
+/dist/
+/target/
+
+# 秘密情報（API キー）。見本は .env.example に書く
+.env
+.env.*
+!.env.example
+
+# ローカルの SQLite データベース（個人データ）
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Claude Code の個人設定
+.claude/settings.local.json

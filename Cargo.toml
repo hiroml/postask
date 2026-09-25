@@ -1,0 +1,16 @@
+[package]
+name = "x-clone-frontend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+leptos = { version = "0.8", features = ["csr"] }
+console_error_panic_hook = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.1"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+
+[workspace]
+members = ["backend", "src-tauri"]
+resolver = "2"
