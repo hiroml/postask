@@ -1,7 +1,7 @@
 ---
 id: "001"
 spec: ../specs/001-post-and-classify.md
-status: in-progress # in-progress | done
+status: done # in-progress | done
 branch: feat/001-post-and-classify
 ---
 
@@ -52,26 +52,26 @@ src/
 
 各タスクの終わりにビルドとテストが通る状態にし、1タスク = 1コミットにする。
 
-- [ ] **T1: 既存の X クローン機能を削除し、骨組みを作る**（Q-011）
+- [x] **T1: 既存の X クローン機能を削除し、骨組みを作る**（Q-011）
   - `src-tauri/src/lib.rs` から login / get_posts / create_post / toggle_like / toggle_retweet / get_profile とデモデータを削除
   - 上記のモジュール構成で空のファイルを作る（`mod` 宣言だけ）
   - `src/app.rs` を「入力欄とタイムラインの枠だけ」の画面に置き換える（ログイン画面・プロフィール画面を削除）
   - `styles.css` から不要なスタイル（ログイン・プロフィール・トレンド）を削除
   - 確認: `cargo check --workspace` と `trunk build` が通る
 
-- [ ] **T2: 依存クレートの追加と DB 層**（FR-2, FR-7 / AC-8）
+- [x] **T2: 依存クレートの追加と DB 層**（FR-2, FR-7 / AC-8）
   - `src-tauri/Cargo.toml` に reqwest（`json`, `rustls-tls`、default-features 無効）/ tokio / async-trait / chrono（`serde`）/ thiserror / dotenvy を追加（Q-008, Q-010）
   - `error.rs`, `models.rs`, `db.rs`: スキーマ作成、`PRAGMA foreign_keys = ON`、`insert_post` / `list_timeline(limit, before_id)` / `replace_tasks(post_id, tasks)` / `set_classify_status`
   - 単体テスト（インメモリ DB）: 保存・新しい順の取得・ページング・タスクの置き換え・ポスト削除でタスクも消えること
 
-- [ ] **T3: 種別の定義、LlmProvider、分類処理**（FR-3, FR-4, FR-8 / AC-5, AC-9）
+- [x] **T3: 種別の定義、LlmProvider、分類処理**（FR-3, FR-4, FR-8 / AC-5, AC-9）
   - `kind.rs`: `TaskKind`（issue / idea / research / note）と、表示名・AI への説明・タスクにするかどうかを1か所に定義（Q-005）
   - `llm/mod.rs`: `LlmProvider` トレイト、`ClassifiedTask`、`LlmError`
   - `llm/mock.rs`: 決まった結果やエラーを返す `MockProvider`
   - `classify.rs`: プロバイダを呼び、`note` を除外し、成功なら `replace_tasks` + `done`、失敗なら `failed` + エラー文を保存
   - 単体テスト（Mock + インメモリ DB）: 複数タスク / note のみ / 失敗時 / 再分類で古いタスクが置き換わる
 
-- [ ] **T4: ClaudeProvider と設定読み込み**（FR-8 / AC-6 の土台）
+- [x] **T4: ClaudeProvider と設定読み込み**（FR-8 / AC-6 の土台）
   - `config.rs`: `dotenvy` で `.env` を読み、`ANTHROPIC_API_KEY`（無ければ「未設定」）と `CLAUDE_MODEL`（既定 `claude-haiku-4-5`）を得る
   - `llm/claude.rs`:
     - リクエスト JSON の組み立て（構造化出力のスキーマは `kind.rs` から生成。モデル別に effort・fallbacks を付ける/付けない）
@@ -80,21 +80,21 @@ src/
     - API キー未設定なら、通信せずに「API キーが設定されていません」エラーを返す
   - 単体テスト（通信なし）: モデル別のリクエスト JSON、正常レスポンス、`refusal` / `max_tokens`、壊れた JSON、キー未設定
 
-- [ ] **T5: Tauri コマンドとイベント**（FR-1〜FR-3, FR-6 / AC-6, AC-7）
+- [x] **T5: Tauri コマンドとイベント**（FR-1〜FR-3, FR-6 / AC-6, AC-7）
   - `commands.rs`: `create_post`（280文字チェック → 保存 → 裏で分類開始）/ `list_timeline` / `retry_classification`
   - 分類の完了時（成功・失敗とも）に `post-classified` イベントで `PostWithTasks` を送る
   - `lib.rs`: DB と `Arc<dyn LlmProvider>` を状態として登録、コマンドを登録
   - 単体テスト: 文字数チェック（0文字・空白のみ・280文字・281文字）
   - `docs/project/architecture.md` のコマンド一覧とデータモデルを更新
 
-- [ ] **T6: 画面の実装**（FR-1, FR-5, FR-6 / AC-10）
+- [x] **T6: 画面の実装**（FR-1, FR-5, FR-6 / AC-10）
   - `tauri.rs`: `invoke` と `listen` のバインディング
   - Composer: 残り文字数の表示（マイナスは赤）、0文字・280文字超えでボタン無効、Ctrl+Enter で投稿
   - Timeline / PostCard: 新しい順、分類状態（分類中… / 失敗 + 再試行ボタン）、`post-classified` を受けてその投稿だけ更新
   - TaskChip: 種別ごとの色（課題=赤系 / 思い付き=黄系 / 調査=青系）、note は表示しない
   - 確認: `trunk build` が通り、`cargo tauri dev` で画面が出る
 
-- [ ] **T7: 受け入れ条件の確認**（AC-1〜AC-11）
+- [x] **T7: 受け入れ条件の確認**（AC-1〜AC-11）
   - `.env` を用意して `cargo tauri dev` で AC-1〜AC-8、AC-10 を手動確認し、結果を作業ログに残す
   - AC-11: `git status` と `git ls-files` で `.env` が入っておらず `.env.example` があることを確認
   - AC-1〜AC-5 で Haiku の分類精度が足りなければ、`CLAUDE_MODEL=claude-opus-5` でも試して比較を記録する（切り替えるかは人が判断）
@@ -117,3 +117,11 @@ src/
 | 日付 | タスク | メモ |
 | --- | --- | --- |
 | 2026-09-25 | 計画作成 | 既存コードとの食い違いを Q-011 / Q-012 で解消 |
+| 2026-09-25 | T1 | 既存機能を削除し、モジュールの空ファイルと最小画面を作成。clippy・trunk build・test 通過 |
+| 2026-09-25 | T2 | reqwest 0.13 では機能名が `rustls-tls` から `rustls` に変わったのでそれを使用。DB 型で必要なため `kind.rs` と文字数チェックも前倒しで実装。テスト13件通過。T5 までは `dead_code` を一時的に許可 |
+| 2026-09-25 | T3 | LlmProvider / MockProvider / classify_post。AI の応答待ちの間は DB のロックを持たない。タイトルが空のタスクは保存しない。テスト計19件通過 |
+| 2026-09-25 | T4 | config.rs と ClaudeProvider。Opus 5 系は思考が既定で有効なため `max_tokens` を 4096 にした（Haiku は仕様どおり 1024）→ 確認依頼で報告する。タイムアウト・接続失敗も最大2回リトライ。テスト計31件通過 |
+| 2026-09-25 | T5 | コマンドとイベント、起動処理。仕様外の追加が2点（確認依頼で報告）: ① 種別の表示名・色をフロントに渡す `list_kinds` コマンド ② 起動時に中断された分類を failed にする処理。`dead_code` の一時許可を解除。テスト計35件通過 |
+| 2026-09-25 | T6 | Composer / PostCard / TaskChip、Tauri の invoke・listen バインディング。「さらに読み込む」ボタンでページング（50件ずつ）。clippy（host・wasm32）と trunk build 通過。画面の動作は T7 で人が確認 |
+| 2026-09-25 | T7（AI 実施分） | 実際の API（claude-haiku-4-5）で AC-1〜AC-5 の例文5件がすべて期待どおりに分類された（`live_acceptance_examples`、約10秒）。`src-tauri` から起動しても直下の `.env` が読まれることを確認。AC-11 確認済み。突き合わせで AC-7 の不備（起動後に設定したキーが再起動まで反映されない）を発見し修正。テスト計36件通過 |
+| 2026-09-25 | T7（人が実施） | 画面での AC-1〜AC-8、AC-10 をすべて確認し問題なし。途中で一度「ボタンが押せない」状態があったが再現せず解消（原因未特定、確認依頼に記録） |
