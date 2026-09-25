@@ -77,7 +77,7 @@ mod tests {
     #[tokio::test]
     async fn multiple_tasks_are_saved() {
         let (conn, id) = setup("READMEを書く、あとCIも設定する");
-        let provider = MockProvider::Tasks(vec![
+        let provider = MockProvider::tasks(vec![
             task(TaskKind::Issue, "READMEを書く"),
             task(TaskKind::Issue, "CIを設定する"),
         ]);
@@ -92,7 +92,7 @@ mod tests {
     #[tokio::test]
     async fn note_only_post_has_no_tasks_but_remains() {
         let (conn, id) = setup("今日は眠い");
-        let provider = MockProvider::Tasks(vec![task(TaskKind::Note, "今日は眠い")]);
+        let provider = MockProvider::tasks(vec![task(TaskKind::Note, "今日は眠い")]);
 
         let result = classify_post(&conn, &provider, id).await.unwrap();
 
@@ -104,7 +104,7 @@ mod tests {
     #[tokio::test]
     async fn blank_titles_are_dropped() {
         let (conn, id) = setup("x");
-        let provider = MockProvider::Tasks(vec![
+        let provider = MockProvider::tasks(vec![
             task(TaskKind::Idea, "  "),
             task(TaskKind::Idea, "付箋っぽく表示する"),
         ]);
@@ -117,7 +117,9 @@ mod tests {
     async fn failure_marks_post_failed_and_keeps_it() {
         let (conn, id) = setup("ログイン画面のバリデーションを直す");
 
-        let result = classify_post(&conn, &MockProvider::Fail, id).await.unwrap();
+        let result = classify_post(&conn, &MockProvider::failing(), id)
+            .await
+            .unwrap();
 
         assert_eq!(result.post.classify_status, ClassifyStatus::Failed);
         assert!(result
@@ -132,9 +134,11 @@ mod tests {
     #[tokio::test]
     async fn retry_after_failure_succeeds_and_clears_error() {
         let (conn, id) = setup("ログイン画面のバリデーションを直す");
-        classify_post(&conn, &MockProvider::Fail, id).await.unwrap();
+        classify_post(&conn, &MockProvider::failing(), id)
+            .await
+            .unwrap();
 
-        let provider = MockProvider::Tasks(vec![task(
+        let provider = MockProvider::tasks(vec![task(
             TaskKind::Issue,
             "ログイン画面のバリデーションを直す",
         )]);
@@ -148,7 +152,7 @@ mod tests {
     #[tokio::test]
     async fn missing_post_is_an_error() {
         let (conn, _) = setup("x");
-        let provider = MockProvider::Tasks(vec![]);
+        let provider = MockProvider::tasks(vec![]);
         assert!(matches!(
             classify_post(&conn, &provider, 999).await,
             Err(AppError::PostNotFound(999))

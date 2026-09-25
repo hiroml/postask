@@ -86,10 +86,48 @@ pub struct Task {
     pub completed_at: Option<String>,
 }
 
+/// リプライの状態（仕様003）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplyStatus {
+    Pending,
+    Done,
+    Failed,
+}
+
+sql_text_enum!(ReplyStatus, "リプライの状態", {
+    Pending => "pending",
+    Done => "done",
+    Failed => "failed",
+});
+
+/// リプライの出典（Web 検索の結果のページ）
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReplySource {
+    pub title: String,
+    pub url: String,
+}
+
+/// ポストへのリプライ（仕様003）。今は AI のみ。
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Reply {
+    pub id: i64,
+    pub post_id: i64,
+    /// 書いた人。AI は `"ai"`（将来 他人のリプライを入れられるよう文字列にしている）
+    pub author: String,
+    pub body: String,
+    pub sources: Vec<ReplySource>,
+    pub model: Option<String>,
+    pub status: ReplyStatus,
+    pub error: Option<String>,
+    pub created_at: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PostWithTasks {
     pub post: Post,
     pub tasks: Vec<Task>,
+    pub replies: Vec<Reply>,
 }
 
 /// AI がポストから読み取ったタスク1件。`note` も含む。

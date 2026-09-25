@@ -11,9 +11,17 @@ use crate::error::{AppError, AppResult};
 use crate::kind::{KindInfo, KINDS};
 use crate::llm::LlmProvider;
 use crate::models::{validate_post_body, ClassifyStatus, Post, PostWithTasks, TaskStatus};
+use crate::reply;
 
-/// 分類が終わったとき（成功・失敗とも）に送るイベント。payload は `PostWithTasks`。
-pub const POST_CLASSIFIED_EVENT: &str = "post-classified";
+/// ポストの状態が裏の処理で変わったとき（分類・AI リプライの完了。成功・失敗とも）に送るイベント。
+/// payload は `PostWithTasks`（仕様003 で `post-classified` から改名）。
+pub const POST_UPDATED_EVENT: &str = "post-updated";
+
+fn emit_post_updated(app: &AppHandle, result: PostWithTasks) {
+    if let Err(e) = app.emit(POST_UPDATED_EVENT, result) {
+        eprintln!("イベントの送信に失敗しました: {e}");
+    }
+}
 
 const MAX_TIMELINE_LIMIT: u32 = 200;
 
@@ -34,11 +42,7 @@ fn spawn_classification(app: AppHandle, state: &AppState, post_id: i64) {
     let llm = Arc::clone(&state.llm);
     tauri::async_runtime::spawn(async move {
         match classify::classify_post(&db, llm.as_ref(), post_id).await {
-            Ok(result) => {
-                if let Err(e) = app.emit(POST_CLASSIFIED_EVENT, result) {
-                    eprintln!("イベントの送信に失敗しました: {e}");
-                }
-            }
+            Ok(result) => emit_post_updated(&app, result),
             Err(e) => eprintln!("ポスト {post_id} の分類結果を保存できませんでした: {e}"),
         }
     });
@@ -86,6 +90,22 @@ pub fn set_task_status(
 ) -> AppResult<PostWithTasks> {
     let c = lock(&state.db)?;
     db::set_task_status(&c, task_id, status)
+}
+
+/// AI にリプライを頼む（仕様003）。聞き直し・再試行も同じ。
+/// 受け付けたらリプライを「生成中」にしてすぐ返し、生成は裏で行う。終わったら `post-updated` で知らせる。
+#[tauri::command(rename_all = "snake_case")]
+pub fn request_ai_reply(app: AppHandle, state: State<'_, AppState>, post_id: i64) -> AppResult<()> {
+    let job = reply::start(&state.db, state.llm.as_ref(), post_id)?;
+    let db = Arc::clone(&state.db);
+    let llm = Arc::clone(&state.llm);
+    tauri::async_runtime::spawn(async move {
+        match reply::generate(&db, llm.as_ref(), job).await {
+            Ok(result) => emit_post_updated(&app, result),
+            Err(e) => eprintln!("ポスト {post_id} のリプライを保存できませんでした: {e}"),
+        }
+    });
+    Ok(())
 }
 
 /// 種別の表示名と色（kind.rs の定義）を返す。

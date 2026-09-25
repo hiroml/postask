@@ -3,7 +3,10 @@ use std::path::Path;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{now, ClassifiedTask, ClassifyStatus, Post, PostWithTasks, Task, TaskStatus};
+use crate::models::{
+    now, ClassifiedTask, ClassifyStatus, Post, PostWithTasks, Reply, ReplySource, ReplyStatus,
+    Task, TaskStatus,
+};
 
 pub const DB_FILE_NAME: &str = "x-clone.sqlite";
 
@@ -38,6 +41,21 @@ const MIGRATIONS: &[&str] = &[
     SCHEMA_V1,
     // 版2: 仕様002 タスクの完了日時
     "ALTER TABLE tasks ADD COLUMN completed_at TEXT;",
+    // 版3: 仕様003 リプライ
+    r#"
+    CREATE TABLE replies (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      author     TEXT    NOT NULL,
+      body       TEXT    NOT NULL DEFAULT '',
+      sources    TEXT    NOT NULL DEFAULT '[]',
+      model      TEXT,
+      status     TEXT    NOT NULL,
+      error      TEXT,
+      created_at TEXT    NOT NULL
+    );
+    CREATE INDEX idx_replies_post_id ON replies(post_id);
+    "#,
 ];
 
 #[cfg(test)]
@@ -136,10 +154,95 @@ fn tasks_of(conn: &Connection, post_id: i64) -> AppResult<Vec<Task>> {
     Ok(tasks)
 }
 
+const REPLY_COLUMNS: &str = "id, post_id, author, body, sources, model, status, error, created_at";
+
+/// AI のリプライの `author`（仕様003）
+pub const AI_AUTHOR: &str = "ai";
+
+fn reply_from_row(row: &Row<'_>) -> rusqlite::Result<Reply> {
+    let sources_json: String = row.get(4)?;
+    let sources = serde_json::from_str(&sources_json).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    Ok(Reply {
+        id: row.get(0)?,
+        post_id: row.get(1)?,
+        author: row.get(2)?,
+        body: row.get(3)?,
+        sources,
+        model: row.get(5)?,
+        status: row.get(6)?,
+        error: row.get(7)?,
+        created_at: row.get(8)?,
+    })
+}
+
+fn replies_of(conn: &Connection, post_id: i64) -> AppResult<Vec<Reply>> {
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT {REPLY_COLUMNS} FROM replies WHERE post_id = ?1 ORDER BY id"
+    ))?;
+    let replies = stmt
+        .query_map([post_id], reply_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(replies)
+}
+
+fn with_details(conn: &Connection, post: Post) -> AppResult<PostWithTasks> {
+    let tasks = tasks_of(conn, post.id)?;
+    let replies = replies_of(conn, post.id)?;
+    Ok(PostWithTasks {
+        post,
+        tasks,
+        replies,
+    })
+}
+
 pub fn get_post_with_tasks(conn: &Connection, post_id: i64) -> AppResult<PostWithTasks> {
     let post = get_post(conn, post_id)?;
-    let tasks = tasks_of(conn, post_id)?;
-    Ok(PostWithTasks { post, tasks })
+    with_details(conn, post)
+}
+
+/// AI のリプライを「生成中」にする。既にある AI のリプライは消す（聞き直しで置き換えるため）。
+pub fn start_ai_reply(conn: &mut Connection, post_id: i64, model: &str) -> AppResult<()> {
+    get_post(conn, post_id)?;
+    let tx = conn.transaction()?;
+    tx.execute(
+        "DELETE FROM replies WHERE post_id = ?1 AND author = ?2",
+        params![post_id, AI_AUTHOR],
+    )?;
+    tx.execute(
+        "INSERT INTO replies (post_id, author, model, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![post_id, AI_AUTHOR, model, ReplyStatus::Pending, now()],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// AI のリプライの結果を保存する。成功なら本文と出典、失敗ならエラー文。
+pub fn finish_ai_reply(
+    conn: &Connection,
+    post_id: i64,
+    result: Result<(&str, &[ReplySource]), &str>,
+) -> AppResult<()> {
+    let updated = match result {
+        Ok((body, sources)) => {
+            let sources_json = serde_json::to_string(sources)
+                .map_err(|e| AppError::Other(format!("出典を保存できませんでした: {e}")))?;
+            conn.execute(
+                "UPDATE replies SET body = ?1, sources = ?2, status = ?3, error = NULL
+                 WHERE post_id = ?4 AND author = ?5",
+                params![body, sources_json, ReplyStatus::Done, post_id, AI_AUTHOR],
+            )?
+        }
+        Err(error) => conn.execute(
+            "UPDATE replies SET status = ?1, error = ?2 WHERE post_id = ?3 AND author = ?4",
+            params![ReplyStatus::Failed, error, post_id, AI_AUTHOR],
+        )?,
+    };
+    if updated == 0 {
+        return Err(AppError::PostNotFound(post_id));
+    }
+    Ok(())
 }
 
 /// 新しい順にポストを返す。`before_id` を渡すと、それより古いものだけを返す（ページング用）。
@@ -160,10 +263,7 @@ pub fn list_timeline(
 
     posts
         .into_iter()
-        .map(|post| {
-            let tasks = tasks_of(conn, post.id)?;
-            Ok(PostWithTasks { post, tasks })
-        })
+        .map(|post| with_details(conn, post))
         .collect()
 }
 
@@ -230,22 +330,120 @@ pub fn set_task_status(
 
 pub const INTERRUPTED_MESSAGE: &str = "アプリの終了により分類が中断されました";
 
-/// 起動時に呼ぶ。前回の終了時に分類中だったポストを failed にして、再試行できるようにする。
+pub const REPLY_INTERRUPTED_MESSAGE: &str = "アプリの終了によりリプライの作成が中断されました";
+
+/// 起動時に呼ぶ。前回の終了時に分類中だったポストと、生成中だったリプライを failed にして、再試行できるようにする。
+/// 戻り値は failed にした件数（ポスト＋リプライ）。
 pub fn fail_interrupted(conn: &Connection) -> AppResult<usize> {
-    Ok(conn.execute(
+    let posts = conn.execute(
         "UPDATE posts SET classify_status = ?1, classify_error = ?2 WHERE classify_status = ?3",
         params![
             ClassifyStatus::Failed,
             INTERRUPTED_MESSAGE,
             ClassifyStatus::Pending
         ],
-    )?)
+    )?;
+    let replies = conn.execute(
+        "UPDATE replies SET status = ?1, error = ?2 WHERE status = ?3",
+        params![
+            ReplyStatus::Failed,
+            REPLY_INTERRUPTED_MESSAGE,
+            ReplyStatus::Pending
+        ],
+    )?;
+    Ok(posts + replies)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::kind::TaskKind;
+
+    fn source(n: u32) -> ReplySource {
+        ReplySource {
+            title: format!("ページ{n}"),
+            url: format!("https://example.com/{n}"),
+        }
+    }
+
+    #[test]
+    fn ai_reply_lifecycle_pending_then_done() {
+        let mut conn = open_in_memory().unwrap();
+        let post = insert_post(&conn, "Rust の非同期ランタイムの違いを調べたい").unwrap();
+
+        start_ai_reply(&mut conn, post.id, "claude-haiku-4-5").unwrap();
+        let r = &get_post_with_tasks(&conn, post.id).unwrap().replies[0];
+        assert_eq!(r.status, ReplyStatus::Pending);
+        assert_eq!(r.author, AI_AUTHOR);
+        assert_eq!(r.model.as_deref(), Some("claude-haiku-4-5"));
+
+        finish_ai_reply(&conn, post.id, Ok(("調べ方です", &[source(1), source(2)]))).unwrap();
+        let r = &get_post_with_tasks(&conn, post.id).unwrap().replies[0];
+        assert_eq!(r.status, ReplyStatus::Done);
+        assert_eq!(r.body, "調べ方です");
+        assert_eq!(r.sources, vec![source(1), source(2)]);
+        assert_eq!(r.error, None);
+    }
+
+    #[test]
+    fn ai_reply_failure_records_error() {
+        let mut conn = open_in_memory().unwrap();
+        let post = insert_post(&conn, "x").unwrap();
+        start_ai_reply(&mut conn, post.id, "m").unwrap();
+
+        finish_ai_reply(&conn, post.id, Err("API キーが設定されていません")).unwrap();
+        let r = &get_post_with_tasks(&conn, post.id).unwrap().replies[0];
+        assert_eq!(r.status, ReplyStatus::Failed);
+        assert_eq!(r.error.as_deref(), Some("API キーが設定されていません"));
+    }
+
+    #[test]
+    fn asking_again_replaces_the_ai_reply() {
+        let mut conn = open_in_memory().unwrap();
+        let post = insert_post(&conn, "x").unwrap();
+        start_ai_reply(&mut conn, post.id, "m").unwrap();
+        finish_ai_reply(&conn, post.id, Ok(("古い", &[]))).unwrap();
+
+        start_ai_reply(&mut conn, post.id, "m").unwrap();
+        finish_ai_reply(&conn, post.id, Ok(("新しい", &[]))).unwrap();
+
+        let replies = get_post_with_tasks(&conn, post.id).unwrap().replies;
+        assert_eq!(replies.len(), 1);
+        assert_eq!(replies[0].body, "新しい");
+    }
+
+    #[test]
+    fn replies_survive_reopen_via_timeline() {
+        let mut conn = open_in_memory().unwrap();
+        let post = insert_post(&conn, "x").unwrap();
+        start_ai_reply(&mut conn, post.id, "m").unwrap();
+        finish_ai_reply(&conn, post.id, Ok(("本文", &[source(1)]))).unwrap();
+
+        let timeline = list_timeline(&conn, 10, None).unwrap();
+        assert_eq!(timeline[0].replies[0].sources, vec![source(1)]);
+    }
+
+    #[test]
+    fn ai_reply_for_missing_post_is_not_found() {
+        let mut conn = open_in_memory().unwrap();
+        assert!(matches!(
+            start_ai_reply(&mut conn, 999, "m"),
+            Err(AppError::PostNotFound(999))
+        ));
+    }
+
+    #[test]
+    fn interrupted_pending_replies_become_failed() {
+        let mut conn = open_in_memory().unwrap();
+        let post = insert_post(&conn, "x").unwrap();
+        set_classify_status(&conn, post.id, ClassifyStatus::Done, None).unwrap();
+        start_ai_reply(&mut conn, post.id, "m").unwrap();
+
+        assert_eq!(fail_interrupted(&conn).unwrap(), 1);
+        let r = &get_post_with_tasks(&conn, post.id).unwrap().replies[0];
+        assert_eq!(r.status, ReplyStatus::Failed);
+        assert_eq!(r.error.as_deref(), Some(REPLY_INTERRUPTED_MESSAGE));
+    }
 
     fn has_column(conn: &Connection, table: &str, column: &str) -> bool {
         let mut stmt = conn

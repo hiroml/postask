@@ -6,6 +6,7 @@ mod error;
 mod kind;
 mod llm;
 mod models;
+mod reply;
 
 use std::sync::{Arc, Mutex};
 
@@ -43,6 +44,7 @@ pub fn run() {
             commands::list_timeline,
             commands::retry_classification,
             commands::set_task_status,
+            commands::request_ai_reply,
             commands::list_kinds,
         ])
         .run(tauri::generate_context!())
