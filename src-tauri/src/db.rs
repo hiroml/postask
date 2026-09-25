@@ -40,7 +40,8 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE tasks ADD COLUMN completed_at TEXT;",
 ];
 
-pub const LATEST_VERSION: i64 = MIGRATIONS.len() as i64;
+#[cfg(test)]
+const LATEST_VERSION: i64 = MIGRATIONS.len() as i64;
 
 fn user_version(conn: &Connection) -> AppResult<i64> {
     Ok(conn.query_row("PRAGMA user_version", [], |r| r.get(0))?)
