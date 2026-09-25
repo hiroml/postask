@@ -87,7 +87,7 @@ src/
   - 単体テスト: 文字数チェック（0文字・空白のみ・280文字・281文字）
   - `docs/project/architecture.md` のコマンド一覧とデータモデルを更新
 
-- [ ] **T6: 画面の実装**（FR-1, FR-5, FR-6 / AC-10）
+- [x] **T6: 画面の実装**（FR-1, FR-5, FR-6 / AC-10）
   - `tauri.rs`: `invoke` と `listen` のバインディング
   - Composer: 残り文字数の表示（マイナスは赤）、0文字・280文字超えでボタン無効、Ctrl+Enter で投稿
   - Timeline / PostCard: 新しい順、分類状態（分類中… / 失敗 + 再試行ボタン）、`post-classified` を受けてその投稿だけ更新
@@ -122,3 +122,4 @@ src/
 | 2026-09-25 | T3 | LlmProvider / MockProvider / classify_post。AI の応答待ちの間は DB のロックを持たない。タイトルが空のタスクは保存しない。テスト計19件通過 |
 | 2026-09-25 | T4 | config.rs と ClaudeProvider。Opus 5 系は思考が既定で有効なため `max_tokens` を 4096 にした（Haiku は仕様どおり 1024）→ 確認依頼で報告する。タイムアウト・接続失敗も最大2回リトライ。テスト計31件通過 |
 | 2026-09-25 | T5 | コマンドとイベント、起動処理。仕様外の追加が2点（確認依頼で報告）: ① 種別の表示名・色をフロントに渡す `list_kinds` コマンド ② 起動時に中断された分類を failed にする処理。`dead_code` の一時許可を解除。テスト計35件通過 |
+| 2026-09-25 | T6 | Composer / PostCard / TaskChip、Tauri の invoke・listen バインディング。「さらに読み込む」ボタンでページング（50件ずつ）。clippy（host・wasm32）と trunk build 通過。画面の動作は T7 で人が確認 |

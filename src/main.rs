@@ -1,4 +1,7 @@
 mod app;
+mod components;
+mod models;
+mod tauri;
 
 use app::*;
 use leptos::prelude::*;
