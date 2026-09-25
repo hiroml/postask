@@ -71,7 +71,7 @@ src/
   - `classify.rs`: プロバイダを呼び、`note` を除外し、成功なら `replace_tasks` + `done`、失敗なら `failed` + エラー文を保存
   - 単体テスト（Mock + インメモリ DB）: 複数タスク / note のみ / 失敗時 / 再分類で古いタスクが置き換わる
 
-- [ ] **T4: ClaudeProvider と設定読み込み**（FR-8 / AC-6 の土台）
+- [x] **T4: ClaudeProvider と設定読み込み**（FR-8 / AC-6 の土台）
   - `config.rs`: `dotenvy` で `.env` を読み、`ANTHROPIC_API_KEY`（無ければ「未設定」）と `CLAUDE_MODEL`（既定 `claude-haiku-4-5`）を得る
   - `llm/claude.rs`:
     - リクエスト JSON の組み立て（構造化出力のスキーマは `kind.rs` から生成。モデル別に effort・fallbacks を付ける/付けない）
@@ -120,3 +120,4 @@ src/
 | 2026-09-25 | T1 | 既存機能を削除し、モジュールの空ファイルと最小画面を作成。clippy・trunk build・test 通過 |
 | 2026-09-25 | T2 | reqwest 0.13 では機能名が `rustls-tls` から `rustls` に変わったのでそれを使用。DB 型で必要なため `kind.rs` と文字数チェックも前倒しで実装。テスト13件通過。T5 までは `dead_code` を一時的に許可 |
 | 2026-09-25 | T3 | LlmProvider / MockProvider / classify_post。AI の応答待ちの間は DB のロックを持たない。タイトルが空のタスクは保存しない。テスト計19件通過 |
+| 2026-09-25 | T4 | config.rs と ClaudeProvider。Opus 5 系は思考が既定で有効なため `max_tokens` を 4096 にした（Haiku は仕様どおり 1024）→ 確認依頼で報告する。タイムアウト・接続失敗も最大2回リトライ。テスト計31件通過 |
