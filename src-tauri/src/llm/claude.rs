@@ -94,6 +94,8 @@ fn output_schema() -> Value {
 pub struct ClaudeProvider {
     client: reqwest::Client,
     api_key: Option<String>,
+    /// 起動時にキーが無かった場合、分類のたびに `.env` を読み直す（AC-7: 設定後の再試行で分類される）
+    reload_key: fn() -> Option<String>,
     model: String,
 }
 
@@ -106,8 +108,13 @@ impl ClaudeProvider {
         Ok(Self {
             client,
             api_key: config.api_key.clone(),
+            reload_key: || Config::load().api_key,
             model: config.model.clone(),
         })
+    }
+
+    fn api_key(&self) -> Option<String> {
+        self.api_key.clone().or_else(self.reload_key)
     }
 
     fn profile(&self) -> ModelProfile {
@@ -229,8 +236,8 @@ fn parse_response(res: &Value) -> Result<Vec<ClassifiedTask>, LlmError> {
 #[async_trait]
 impl LlmProvider for ClaudeProvider {
     async fn classify(&self, post_body: &str) -> Result<Vec<ClassifiedTask>, LlmError> {
-        let api_key = self.api_key.as_deref().ok_or(LlmError::MissingApiKey)?;
-        let res = self.send(api_key, &self.request_body(post_body)).await?;
+        let api_key = self.api_key().ok_or(LlmError::MissingApiKey)?;
+        let res = self.send(&api_key, &self.request_body(post_body)).await?;
         parse_response(&res)
     }
 }
@@ -240,12 +247,31 @@ mod tests {
     use super::*;
     use crate::kind::TaskKind;
 
+    /// テストでは実際の .env を読まない
     fn provider(model: &str, key: Option<&str>) -> ClaudeProvider {
-        ClaudeProvider::new(&Config {
-            api_key: key.map(str::to_string),
-            model: model.to_string(),
-        })
-        .unwrap()
+        ClaudeProvider {
+            reload_key: || None,
+            ..ClaudeProvider::new(&Config {
+                api_key: key.map(str::to_string),
+                model: model.to_string(),
+            })
+            .unwrap()
+        }
+    }
+
+    #[test]
+    fn key_is_reloaded_when_missing_at_startup() {
+        let p = ClaudeProvider {
+            reload_key: || Some("sk-later".to_string()),
+            ..provider("claude-haiku-4-5", None)
+        };
+        assert_eq!(p.api_key().as_deref(), Some("sk-later"));
+
+        let p = ClaudeProvider {
+            reload_key: || Some("sk-later".to_string()),
+            ..provider("claude-haiku-4-5", Some("sk-first"))
+        };
+        assert_eq!(p.api_key().as_deref(), Some("sk-first"));
     }
 
     #[test]
@@ -340,6 +366,45 @@ mod tests {
         assert!(is_retryable(StatusCode::INTERNAL_SERVER_ERROR));
         assert!(!is_retryable(StatusCode::BAD_REQUEST));
         assert!(!is_retryable(StatusCode::UNAUTHORIZED));
+    }
+
+    /// 実際の Claude API で受け入れ条件 AC-1〜AC-5 の例を分類する（料金がかかる）。
+    /// 実行: `cargo test -p x-clone live_ -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore = "Claude API を実際に呼ぶ"]
+    async fn live_acceptance_examples() {
+        let config = Config::load();
+        assert!(
+            config.api_key.is_some(),
+            ".env に ANTHROPIC_API_KEY がありません"
+        );
+        let p = ClaudeProvider::new(&config).unwrap();
+        println!("model: {}", config.model);
+
+        let cases: &[(&str, &[TaskKind])] = &[
+            ("ログイン画面のバリデーションを直す", &[TaskKind::Issue]),
+            (
+                "Rust の非同期ランタイムの違いを調べたい",
+                &[TaskKind::Research],
+            ),
+            ("タスクを付箋っぽく表示したら面白いかも", &[TaskKind::Idea]),
+            (
+                "READMEを書く、あとCIも設定する",
+                &[TaskKind::Issue, TaskKind::Issue],
+            ),
+            ("今日は眠い", &[TaskKind::Note]),
+        ];
+
+        let mut failures = Vec::new();
+        for (body, expected) in cases {
+            let tasks = p.classify(body).await.expect("分類に失敗");
+            let kinds: Vec<TaskKind> = tasks.iter().map(|t| t.kind).collect();
+            println!("{body}\n  => {tasks:?}");
+            if kinds != *expected {
+                failures.push(format!("{body}: 期待 {expected:?} / 実際 {kinds:?}"));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
     }
 
     #[tokio::test]

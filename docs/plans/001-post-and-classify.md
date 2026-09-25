@@ -123,3 +123,5 @@ src/
 | 2026-09-25 | T4 | config.rs と ClaudeProvider。Opus 5 系は思考が既定で有効なため `max_tokens` を 4096 にした（Haiku は仕様どおり 1024）→ 確認依頼で報告する。タイムアウト・接続失敗も最大2回リトライ。テスト計31件通過 |
 | 2026-09-25 | T5 | コマンドとイベント、起動処理。仕様外の追加が2点（確認依頼で報告）: ① 種別の表示名・色をフロントに渡す `list_kinds` コマンド ② 起動時に中断された分類を failed にする処理。`dead_code` の一時許可を解除。テスト計35件通過 |
 | 2026-09-25 | T6 | Composer / PostCard / TaskChip、Tauri の invoke・listen バインディング。「さらに読み込む」ボタンでページング（50件ずつ）。clippy（host・wasm32）と trunk build 通過。画面の動作は T7 で人が確認 |
+| 2026-09-25 | T7（AI 実施分） | 実際の API（claude-haiku-4-5）で AC-1〜AC-5 の例文5件がすべて期待どおりに分類された（`live_acceptance_examples`、約10秒）。`src-tauri` から起動しても直下の `.env` が読まれることを確認。AC-11 確認済み。突き合わせで AC-7 の不備（起動後に設定したキーが再起動まで反映されない）を発見し修正。テスト計36件通過 |
+| | T7（人の確認待ち） | 画面での AC-6〜AC-8、AC-10 → [確認依頼](../reviews/001-post-and-classify.md) |
