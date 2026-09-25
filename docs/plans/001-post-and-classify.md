@@ -1,7 +1,7 @@
 ---
 id: "001"
 spec: ../specs/001-post-and-classify.md
-status: in-progress # in-progress | done
+status: done # in-progress | done
 branch: feat/001-post-and-classify
 ---
 

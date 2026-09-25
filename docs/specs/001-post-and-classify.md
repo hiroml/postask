@@ -1,7 +1,7 @@
 ---
 id: "001"
 title: ポスト投稿と自動分類・タスク化
-status: approved # draft | review | approved | done | rejected（approved/done は人のみ変更可）
+status: done # draft | review | approved | done | rejected（approved/done は人のみ変更可）
 created: 2026-09-25
 updated: 2026-09-25
 approved_by: hikou # 2026-09-25 会話上で承認（AI が代理記入）
@@ -239,3 +239,4 @@ Claude の実装（`ClaudeProvider`）:
 | 2026-09-25 | Q-004〜Q-010 の回答を反映（.env、280文字、Haiku 4.5、モデル別パラメータ、dotenvy） | AI |
 | 2026-09-25 | 承認（approved） | hikou |
 | 2026-09-25 | 計画中に見つかった食い違いについて Q-011（既存機能の削除）・Q-012（DB の場所）の決定を追記 | AI（hikou 決定） |
+| 2026-09-25 | 実装完了・確認済み（done）。仕様外の判断7点は確認依頼で承認 | hikou |

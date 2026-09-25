@@ -3,7 +3,7 @@ id: "001"
 spec: ../specs/001-post-and-classify.md
 plan: ../plans/001-post-and-classify.md
 branch: feat/001-post-and-classify
-status: pending # pending | changes-requested | approved（approved は人のみ）
+status: approved # pending | changes-requested | approved（approved は人のみ）
 requested: 2026-09-25
 ---
 
@@ -90,5 +90,5 @@ AI の呼び出しは `LlmProvider` トレイトの裏にあり、後でロー�
 
 <!-- 人が記入 -->
 
-- 判定: <!-- approved / changes-requested -->
-- コメント:
+- 判定: approved（hikou、2026-09-25 会話上で承認。AI が代理記入）
+- コメント: 全ケースの動作確認済み。仕様外の判断7点もあわせて承認。
