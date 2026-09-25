@@ -547,6 +547,40 @@ mod tests {
         assert_eq!(timeline[0].tasks[0].title, "古いタスク");
     }
 
+    /// 実際の DB の**コピー**を最新の版に上げ、データが残ることを確かめる（人の DB は触らない）。
+    /// 実行: `X_CLONE_DB_COPY=<コピーのパス> cargo test -p x-clone real_db_copy -- --ignored --nocapture`
+    #[test]
+    #[ignore = "実際の DB のコピーを使う"]
+    fn real_db_copy_is_upgraded_keeping_data() {
+        let path =
+            std::env::var("X_CLONE_DB_COPY").expect("X_CLONE_DB_COPY にコピーのパスを指定する");
+        let before: (i64, i64) = {
+            let conn = Connection::open(&path).unwrap();
+            println!("更新前の版: {}", user_version(&conn).unwrap());
+            (
+                conn.query_row("SELECT COUNT(*) FROM posts", [], |r| r.get(0))
+                    .unwrap(),
+                conn.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))
+                    .unwrap(),
+            )
+        };
+
+        let conn = open(Path::new(&path)).unwrap();
+        let timeline = list_timeline(&conn, 1000, None).unwrap();
+        let tasks: usize = timeline.iter().map(|p| p.tasks.len()).sum();
+        println!(
+            "更新後の版: {} / ポスト {}件（更新前 {}件）/ タスク {}件（更新前 {}件）",
+            user_version(&conn).unwrap(),
+            timeline.len(),
+            before.0,
+            tasks,
+            before.1
+        );
+        assert_eq!(user_version(&conn).unwrap(), LATEST_VERSION);
+        assert_eq!(timeline.len() as i64, before.0);
+        assert_eq!(tasks as i64, before.1);
+    }
+
     #[test]
     fn migration_runs_only_once() {
         let mut conn = open_in_memory().unwrap();
