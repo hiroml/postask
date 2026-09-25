@@ -218,6 +218,46 @@ button {
   overflow-wrap: anywhere;
 }
 
+/* 完了チェック（仕様002） */
+.task-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 2px solid var(--kind-color);
+  border-radius: 50%;
+  background: white;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.task-check:hover {
+  background: color-mix(in srgb, var(--kind-color) 20%, white);
+}
+
+.task-check:focus-visible {
+  outline: 2px solid #1d9bf0;
+  outline-offset: 1px;
+}
+
+.task-chip.done {
+  opacity: 0.6;
+}
+
+.task-chip.done .task-check {
+  background: var(--kind-color);
+}
+
+.task-chip.done .task-chip-title {
+  text-decoration: line-through;
+  color: #64748b;
+}
+
 .empty {
   padding: 32px 20px;
   color: #94a3b8;

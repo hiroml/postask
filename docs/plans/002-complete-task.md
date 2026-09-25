@@ -27,7 +27,7 @@ branch: feat/002-complete-task
   - `commands.rs`: `set_task_status` コマンドを追加
   - 単体テスト: 完了→日時あり / 未完了に戻す→NULL / 他のタスクは変わらない / 存在しない ID はエラー
 
-- [ ] **T3: 画面**（FR-1, FR-2, FR-4, FR-5 / AC-1, AC-2）
+- [x] **T3: 画面**（FR-1, FR-2, FR-4, FR-5 / AC-1, AC-2）
   - タスクチップの左端にチェックボックス（○ / ✓）。Space / Enter でも切り替え
   - 完了は取り消し線＋薄い色、`title` 属性で「完了: MM/DD HH:MM」
   - 楽観的更新。失敗したら元に戻し、エラーを表示
@@ -51,3 +51,4 @@ branch: feat/002-complete-task
 | 2026-09-25 | 計画作成 | |
 | 2026-09-25 | T1 | `PRAGMA user_version` による版管理。版1=仕様001のスキーマ、版2=`completed_at`。仕様001の形の DB が版2に上がりデータが残ることをテストで確認。テスト計39件 |
 | 2026-09-26 | T2 | `TaskStatus` 型（DB 保存用のマクロ `sql_text_enum!` を追加し `ClassifyStatus` も共通化）、`db::set_task_status`、コマンド登録。テスト計42件。※ T1 のコミット時に clippy の失敗を見落としていたため `6b1ce1c` で修正し、以降は検証が通ったときだけ commit するようにした |
+| 2026-09-26 | T3 | チップ左端のチェック（button + role=checkbox）、完了は取り消し線＋薄い色＋完了日時のツールチップ、楽観的更新と失敗時の巻き戻し。ヘッドレス Edge ＋偽の Tauri 応答で「完了→戻す→保存失敗で巻き戻し」を確認。ユーザーの開発サーバーと衝突しないよう、trunk build は一時フォルダに出力 |

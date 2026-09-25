@@ -4,7 +4,7 @@ use serde::de::IgnoredAny;
 use serde::Serialize;
 
 use crate::components::{Composer, PostCard};
-use crate::models::{ClassifyStatus, KindInfo, Post, PostWithTasks};
+use crate::models::{ClassifyStatus, KindInfo, Post, PostWithTasks, Task, TaskStatus};
 use crate::tauri::{invoke, listen, NoArgs};
 
 /// バックエンドの commands::POST_CLASSIFIED_EVENT と同じ名前
@@ -20,6 +20,12 @@ struct ListTimelineArgs {
 #[derive(Serialize)]
 struct RetryArgs {
     post_id: i64,
+}
+
+#[derive(Serialize)]
+struct SetTaskStatusArgs {
+    task_id: i64,
+    status: TaskStatus,
 }
 
 #[component]
@@ -104,6 +110,44 @@ pub fn App() -> impl IntoView {
         });
     });
 
+    // タスクの状態を書き換え、書き換える前のタスクを返す
+    let replace_task = move |task_id: i64, f: &dyn Fn(&mut Task)| -> Option<Task> {
+        let mut previous = None;
+        posts.update(|list| {
+            if let Some(t) = list
+                .iter_mut()
+                .flat_map(|p| p.tasks.iter_mut())
+                .find(|t| t.id == task_id)
+            {
+                previous = Some(t.clone());
+                f(t);
+            }
+        });
+        previous
+    };
+
+    // 完了・未完了の切り替え（仕様002）。先に表示を変え、保存に失敗したら元に戻す
+    let on_toggle_task = Callback::new(move |(task_id, status): (i64, TaskStatus)| {
+        let Some(previous) = replace_task(task_id, &|t| {
+            t.status = status;
+            if status == TaskStatus::Open {
+                t.completed_at = None;
+            }
+        }) else {
+            return;
+        };
+        spawn_local(async move {
+            let args = SetTaskStatusArgs { task_id, status };
+            match invoke::<_, PostWithTasks>("set_task_status", &args).await {
+                Ok(item) => upsert(item),
+                Err(e) => {
+                    replace_task(task_id, &|t| *t = previous.clone());
+                    load_error.set(Some(format!("タスクの状態を保存できませんでした: {e}")));
+                }
+            }
+        });
+    });
+
     view! {
         <main class="page-shell">
             <section class="feed-panel">
@@ -123,7 +167,16 @@ pub fn App() -> impl IntoView {
                     posts
                         .get()
                         .into_iter()
-                        .map(|item| view! { <PostCard item=item kinds=kinds on_retry=on_retry /> })
+                        .map(|item| {
+                            view! {
+                                <PostCard
+                                    item=item
+                                    kinds=kinds
+                                    on_retry=on_retry
+                                    on_toggle_task=on_toggle_task
+                                />
+                            }
+                        })
                         .collect_view()
                 }}
 

@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use wasm_bindgen::prelude::*;
 
-use crate::models::{ClassifyStatus, KindInfo, PostWithTasks, Task};
+use crate::models::{ClassifyStatus, KindInfo, PostWithTasks, Task, TaskStatus};
 
 #[wasm_bindgen]
 extern "C" {
@@ -42,6 +42,8 @@ pub fn PostCard(
     item: PostWithTasks,
     kinds: RwSignal<Vec<KindInfo>>,
     on_retry: Callback<i64>,
+    /// (タスク ID, 切り替え後の状態)
+    on_toggle_task: Callback<(i64, TaskStatus)>,
 ) -> impl IntoView {
     let PostWithTasks { post, tasks } = item;
     let post_id = post.id;
@@ -68,7 +70,7 @@ pub fn PostCard(
             <div class="task-chips">
                 {tasks
                     .into_iter()
-                    .map(|task| view! { <TaskChip task=task kinds=kinds /> })
+                    .map(|task| view! { <TaskChip task=task kinds=kinds on_toggle=on_toggle_task /> })
                     .collect_view()}
             </div>
         }
@@ -85,8 +87,21 @@ pub fn PostCard(
 }
 
 /// 種別ごとに色分けしたタスクのチップ。表示名と色はバックエンドの kind.rs から受け取る。
+/// 左端のチェックボックスで完了・未完了を切り替える（仕様002）。
 #[component]
-fn TaskChip(task: Task, kinds: RwSignal<Vec<KindInfo>>) -> impl IntoView {
+fn TaskChip(
+    task: Task,
+    kinds: RwSignal<Vec<KindInfo>>,
+    on_toggle: Callback<(i64, TaskStatus)>,
+) -> impl IntoView {
+    let task_id = task.id;
+    let status = task.status;
+    let done = status == TaskStatus::Done;
+    let completed_title = task
+        .completed_at
+        .as_deref()
+        .filter(|_| done)
+        .map(|at| format!("完了: {}", format_time(at)));
     let kind = task.kind;
     let info = {
         let kind = kind.clone();
@@ -110,7 +125,22 @@ fn TaskChip(task: Task, kinds: RwSignal<Vec<KindInfo>>) -> impl IntoView {
 
     view! {
         <Show when=visible>
-            <span class="task-chip" style=style.clone()>
+            <span
+                class="task-chip"
+                class:done=done
+                style=style.clone()
+                title=completed_title.clone()
+            >
+                <button
+                    type="button"
+                    class="task-check"
+                    role="checkbox"
+                    aria-checked=if done { "true" } else { "false" }
+                    aria-label=if done { "未完了に戻す" } else { "完了にする" }
+                    on:click=move |_| on_toggle.run((task_id, status.toggled()))
+                >
+                    {if done { "✓" } else { "" }}
+                </button>
                 <span class="task-chip-kind">{label.clone()}</span>
                 <span class="task-chip-title">{task.title.clone()}</span>
             </span>

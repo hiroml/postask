@@ -1,6 +1,6 @@
 //! バックエンド（src-tauri/src/models.rs, kind.rs）と同じ JSON 形の型。
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// バックエンドの `MAX_POST_CHARS` と同じ値にする（Q-006）
 pub const MAX_POST_CHARS: usize = 280;
@@ -22,11 +22,29 @@ pub struct Post {
     pub classify_error: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskStatus {
+    Open,
+    Done,
+}
+
+impl TaskStatus {
+    pub fn toggled(self) -> Self {
+        match self {
+            TaskStatus::Open => TaskStatus::Done,
+            TaskStatus::Done => TaskStatus::Open,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Task {
     pub id: i64,
     pub kind: String,
     pub title: String,
+    pub status: TaskStatus,
+    pub completed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
