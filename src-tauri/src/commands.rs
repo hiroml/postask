@@ -10,7 +10,7 @@ use crate::db;
 use crate::error::{AppError, AppResult};
 use crate::kind::{KindInfo, KINDS};
 use crate::llm::LlmProvider;
-use crate::models::{validate_post_body, ClassifyStatus, Post, PostWithTasks};
+use crate::models::{validate_post_body, ClassifyStatus, Post, PostWithTasks, TaskStatus};
 
 /// 分類が終わったとき（成功・失敗とも）に送るイベント。payload は `PostWithTasks`。
 pub const POST_CLASSIFIED_EVENT: &str = "post-classified";
@@ -75,6 +75,17 @@ pub fn retry_classification(
     }
     spawn_classification(app, &state, post_id);
     Ok(())
+}
+
+/// タスクを完了・未完了にする（仕様002）。画面の更新用に、そのタスクを含むポスト全体を返す。
+#[tauri::command(rename_all = "snake_case")]
+pub fn set_task_status(
+    state: State<'_, AppState>,
+    task_id: i64,
+    status: TaskStatus,
+) -> AppResult<PostWithTasks> {
+    let c = lock(&state.db)?;
+    db::set_task_status(&c, task_id, status)
 }
 
 /// 種別の表示名と色（kind.rs の定義）を返す。

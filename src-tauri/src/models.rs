@@ -6,6 +6,36 @@ use crate::kind::TaskKind;
 /// ポスト本文の最大文字数（前後の空白を除いて数える）。Q-006
 pub const MAX_POST_CHARS: usize = 280;
 
+/// DB に文字列として保存する enum に、`as_str` と rusqlite の `ToSql` / `FromSql` を実装する。
+macro_rules! sql_text_enum {
+    ($ty:ident, $what:literal, { $($variant:ident => $text:literal),+ $(,)? }) => {
+        impl $ty {
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    $($ty::$variant => $text),+
+                }
+            }
+        }
+
+        impl ToSql for $ty {
+            fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+                Ok(ToSqlOutput::from(self.as_str()))
+            }
+        }
+
+        impl FromSql for $ty {
+            fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                match value.as_str()? {
+                    $($text => Ok($ty::$variant),)+
+                    other => Err(FromSqlError::Other(
+                        format!("未知の{}: {other}", $what).into(),
+                    )),
+                }
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ClassifyStatus {
@@ -14,34 +44,24 @@ pub enum ClassifyStatus {
     Failed,
 }
 
-impl ClassifyStatus {
-    fn as_str(self) -> &'static str {
-        match self {
-            ClassifyStatus::Pending => "pending",
-            ClassifyStatus::Done => "done",
-            ClassifyStatus::Failed => "failed",
-        }
-    }
+sql_text_enum!(ClassifyStatus, "分類状態", {
+    Pending => "pending",
+    Done => "done",
+    Failed => "failed",
+});
+
+/// タスクの状態（仕様002）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskStatus {
+    Open,
+    Done,
 }
 
-impl ToSql for ClassifyStatus {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(self.as_str()))
-    }
-}
-
-impl FromSql for ClassifyStatus {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        match value.as_str()? {
-            "pending" => Ok(ClassifyStatus::Pending),
-            "done" => Ok(ClassifyStatus::Done),
-            "failed" => Ok(ClassifyStatus::Failed),
-            other => Err(FromSqlError::Other(
-                format!("未知の分類状態: {other}").into(),
-            )),
-        }
-    }
-}
+sql_text_enum!(TaskStatus, "タスクの状態", {
+    Open => "open",
+    Done => "done",
+});
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Post {
@@ -60,8 +80,10 @@ pub struct Task {
     pub title: String,
     pub target: String,
     pub action: String,
-    pub status: String,
+    pub status: TaskStatus,
     pub created_at: String,
+    /// 完了日時（未完了なら None）。仕様002
+    pub completed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

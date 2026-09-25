@@ -42,6 +42,7 @@ pub fn run() {
             commands::create_post,
             commands::list_timeline,
             commands::retry_classification,
+            commands::set_task_status,
             commands::list_kinds,
         ])
         .run(tauri::generate_context!())

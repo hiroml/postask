@@ -3,7 +3,7 @@ use std::path::Path;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{now, ClassifiedTask, ClassifyStatus, Post, PostWithTasks, Task};
+use crate::models::{now, ClassifiedTask, ClassifyStatus, Post, PostWithTasks, Task, TaskStatus};
 
 pub const DB_FILE_NAME: &str = "x-clone.sqlite";
 
@@ -80,7 +80,8 @@ fn init(conn: &mut Connection) -> AppResult<()> {
 }
 
 const POST_COLUMNS: &str = "id, body, created_at, classify_status, classify_error";
-const TASK_COLUMNS: &str = "id, post_id, kind, title, target, action, status, created_at";
+const TASK_COLUMNS: &str =
+    "id, post_id, kind, title, target, action, status, created_at, completed_at";
 
 fn post_from_row(row: &Row<'_>) -> rusqlite::Result<Post> {
     Ok(Post {
@@ -102,6 +103,7 @@ fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Task> {
         action: row.get(5)?,
         status: row.get(6)?,
         created_at: row.get(7)?,
+        completed_at: row.get(8)?,
     })
 }
 
@@ -201,6 +203,31 @@ pub fn set_classify_status(
     Ok(())
 }
 
+/// タスクを完了・未完了にする（仕様002）。完了なら完了日時を記録し、未完了なら消す。
+/// 画面の更新用に、そのタスクを含むポスト全体を返す。
+pub fn set_task_status(
+    conn: &Connection,
+    task_id: i64,
+    status: TaskStatus,
+) -> AppResult<PostWithTasks> {
+    let completed_at = match status {
+        TaskStatus::Done => Some(now()),
+        TaskStatus::Open => None,
+    };
+    let updated = conn.execute(
+        "UPDATE tasks SET status = ?1, completed_at = ?2 WHERE id = ?3",
+        params![status, completed_at, task_id],
+    )?;
+    if updated == 0 {
+        return Err(AppError::TaskNotFound(task_id));
+    }
+    let post_id: i64 =
+        conn.query_row("SELECT post_id FROM tasks WHERE id = ?1", [task_id], |r| {
+            r.get(0)
+        })?;
+    get_post_with_tasks(conn, post_id)
+}
+
 pub const INTERRUPTED_MESSAGE: &str = "アプリの終了により分類が中断されました";
 
 /// 起動時に呼ぶ。前回の終了時に分類中だったポストを failed にして、再試行できるようにする。
@@ -230,6 +257,62 @@ mod tests {
             .collect::<rusqlite::Result<_>>()
             .unwrap();
         names.iter().any(|n| n == column)
+    }
+
+    fn post_with_two_tasks(conn: &mut Connection) -> (i64, i64, i64) {
+        let post = insert_post(conn, "READMEを書く、あとCIも設定する").unwrap();
+        replace_tasks(
+            conn,
+            post.id,
+            &[
+                task(TaskKind::Issue, "READMEを書く"),
+                task(TaskKind::Issue, "CIを設定する"),
+            ],
+        )
+        .unwrap();
+        let tasks = get_post_with_tasks(conn, post.id).unwrap().tasks;
+        (post.id, tasks[0].id, tasks[1].id)
+    }
+
+    #[test]
+    fn completing_a_task_records_time_and_only_changes_that_task() {
+        let mut conn = open_in_memory().unwrap();
+        let (post_id, first, second) = post_with_two_tasks(&mut conn);
+
+        let pwt = set_task_status(&conn, first, TaskStatus::Done).unwrap();
+
+        assert_eq!(pwt.post.id, post_id);
+        let t1 = pwt.tasks.iter().find(|t| t.id == first).unwrap();
+        let t2 = pwt.tasks.iter().find(|t| t.id == second).unwrap();
+        assert_eq!(t1.status, TaskStatus::Done);
+        assert!(t1.completed_at.is_some());
+        assert_eq!(t2.status, TaskStatus::Open);
+        assert_eq!(t2.completed_at, None);
+    }
+
+    #[test]
+    fn reopening_a_task_clears_completed_at() {
+        let mut conn = open_in_memory().unwrap();
+        let (_, first, _) = post_with_two_tasks(&mut conn);
+        set_task_status(&conn, first, TaskStatus::Done).unwrap();
+
+        let pwt = set_task_status(&conn, first, TaskStatus::Open).unwrap();
+        let t1 = pwt.tasks.iter().find(|t| t.id == first).unwrap();
+        assert_eq!(t1.status, TaskStatus::Open);
+        assert_eq!(t1.completed_at, None);
+    }
+
+    #[test]
+    fn missing_task_is_not_found_and_changes_nothing() {
+        let mut conn = open_in_memory().unwrap();
+        let (post_id, _, _) = post_with_two_tasks(&mut conn);
+
+        assert!(matches!(
+            set_task_status(&conn, 999, TaskStatus::Done),
+            Err(AppError::TaskNotFound(999))
+        ));
+        let tasks = get_post_with_tasks(&conn, post_id).unwrap().tasks;
+        assert!(tasks.iter().all(|t| t.status == TaskStatus::Open));
     }
 
     #[test]
@@ -348,7 +431,7 @@ mod tests {
         let pwt = get_post_with_tasks(&conn, post.id).unwrap();
         let titles: Vec<_> = pwt.tasks.iter().map(|t| t.title.as_str()).collect();
         assert_eq!(titles, vec!["READMEを書く", "CIを設定する"]);
-        assert!(pwt.tasks.iter().all(|t| t.status == "open"));
+        assert!(pwt.tasks.iter().all(|t| t.status == TaskStatus::Open));
     }
 
     #[test]

@@ -20,7 +20,7 @@ branch: feat/002-complete-task
   - 版1 = 仕様001のスキーマ（`CREATE TABLE IF NOT EXISTS` なので既存 DB にも安全）、版2 = `ALTER TABLE tasks ADD COLUMN completed_at TEXT`
   - 単体テスト: 新規 DB が最新版になる / 仕様001の形の DB（版0・データあり）が版2に上がりデータが残る / 2回目の起動で何もしない
 
-- [ ] **T2: TaskStatus と set_task_status**（FR-1〜FR-5 / AC-4〜AC-6）
+- [x] **T2: TaskStatus と set_task_status**（FR-1〜FR-5 / AC-4〜AC-6）
   - `models.rs`: `TaskStatus`（open / done）、`Task.completed_at`
   - `db.rs`: `set_task_status(task_id, status)`（done なら `completed_at` に現在時刻、open なら NULL）→ そのタスクを含む `PostWithTasks` を返す
   - `error.rs`: `TaskNotFound`
@@ -50,3 +50,4 @@ branch: feat/002-complete-task
 | --- | --- | --- |
 | 2026-09-25 | 計画作成 | |
 | 2026-09-25 | T1 | `PRAGMA user_version` による版管理。版1=仕様001のスキーマ、版2=`completed_at`。仕様001の形の DB が版2に上がりデータが残ることをテストで確認。テスト計39件 |
+| 2026-09-26 | T2 | `TaskStatus` 型（DB 保存用のマクロ `sql_text_enum!` を追加し `ClassifyStatus` も共通化）、`db::set_task_status`、コマンド登録。テスト計42件。※ T1 のコミット時に clippy の失敗を見落としていたため `6b1ce1c` で修正し、以降は検証が通ったときだけ commit するようにした |
