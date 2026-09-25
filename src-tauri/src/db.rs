@@ -7,7 +7,8 @@ use crate::models::{now, ClassifiedTask, ClassifyStatus, Post, PostWithTasks, Ta
 
 pub const DB_FILE_NAME: &str = "x-clone.sqlite";
 
-const SCHEMA: &str = r#"
+/// 版1: 仕様001のスキーマ。`IF NOT EXISTS` なので、版管理を入れる前に作られた DB（版0・テーブルあり）にも安全に当てられる。
+const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS posts (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   body            TEXT    NOT NULL,
@@ -30,24 +31,51 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_post_id ON tasks(post_id);
 "#;
 
-/// DB ファイルを開き（無ければ作り）、スキーマを用意する。
+/// DB の版ごとの更新。`MIGRATIONS[i]` を当てると版が `i + 1` になる。
+/// テーブルや列を増やすときは、既存の要素は変えずに末尾へ追加する（B-012）。
+const MIGRATIONS: &[&str] = &[
+    // 版1: 仕様001（posts / tasks）
+    SCHEMA_V1,
+    // 版2: 仕様002 タスクの完了日時
+    "ALTER TABLE tasks ADD COLUMN completed_at TEXT;",
+];
+
+pub const LATEST_VERSION: i64 = MIGRATIONS.len() as i64;
+
+fn user_version(conn: &Connection) -> AppResult<i64> {
+    Ok(conn.query_row("PRAGMA user_version", [], |r| r.get(0))?)
+}
+
+/// 足りない版の更新を順番に当てる。1版ずつトランザクションで行い、成功したら版数を上げる。
+fn migrate(conn: &mut Connection) -> AppResult<()> {
+    let current = user_version(conn)?;
+    for (i, sql) in MIGRATIONS.iter().enumerate().skip(current as usize) {
+        let version = i as i64 + 1;
+        let tx = conn.transaction()?;
+        tx.execute_batch(sql)?;
+        tx.pragma_update(None, "user_version", version)?;
+        tx.commit()?;
+    }
+    Ok(())
+}
+
+/// DB ファイルを開き（無ければ作り）、スキーマを最新の版にする。
 pub fn open(path: &Path) -> AppResult<Connection> {
-    let conn = Connection::open(path)?;
-    init(&conn)?;
+    let mut conn = Connection::open(path)?;
+    init(&mut conn)?;
     Ok(conn)
 }
 
 #[cfg(test)]
 pub fn open_in_memory() -> AppResult<Connection> {
-    let conn = Connection::open_in_memory()?;
-    init(&conn)?;
+    let mut conn = Connection::open_in_memory()?;
+    init(&mut conn)?;
     Ok(conn)
 }
 
-fn init(conn: &Connection) -> AppResult<()> {
+fn init(conn: &mut Connection) -> AppResult<()> {
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-    conn.execute_batch(SCHEMA)?;
-    Ok(())
+    migrate(conn)
 }
 
 const POST_COLUMNS: &str = "id, body, created_at, classify_status, classify_error";
@@ -190,6 +218,60 @@ pub fn fail_interrupted(conn: &Connection) -> AppResult<usize> {
 mod tests {
     use super::*;
     use crate::kind::TaskKind;
+
+    fn has_column(conn: &Connection, table: &str, column: &str) -> bool {
+        let mut stmt = conn
+            .prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
+            .unwrap();
+        let names: Vec<String> = stmt
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        names.iter().any(|n| n == column)
+    }
+
+    #[test]
+    fn new_db_is_at_latest_version() {
+        let conn = open_in_memory().unwrap();
+        assert_eq!(user_version(&conn).unwrap(), LATEST_VERSION);
+        assert!(has_column(&conn, "tasks", "completed_at"));
+    }
+
+    #[test]
+    fn spec001_db_is_upgraded_keeping_data() {
+        // 版管理を入れる前（仕様001）の DB を再現: 版0、テーブルとデータあり、completed_at なし
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA_V1).unwrap();
+        conn.execute(
+            "INSERT INTO posts (body, created_at, classify_status) VALUES ('古いポスト', '2026-09-25T00:00:00Z', 'done')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks (post_id, kind, title, action, created_at) VALUES (1, 'issue', '古いタスク', '直す', '2026-09-25T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 0);
+        assert!(!has_column(&conn, "tasks", "completed_at"));
+
+        init(&mut conn).unwrap();
+
+        assert_eq!(user_version(&conn).unwrap(), LATEST_VERSION);
+        assert!(has_column(&conn, "tasks", "completed_at"));
+        let timeline = list_timeline(&conn, 10, None).unwrap();
+        assert_eq!(timeline[0].post.body, "古いポスト");
+        assert_eq!(timeline[0].tasks[0].title, "古いタスク");
+    }
+
+    #[test]
+    fn migration_runs_only_once() {
+        let mut conn = open_in_memory().unwrap();
+        // もう一度当てても、版2の ALTER TABLE が二重に走らない（走ればエラーになる）
+        init(&mut conn).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), LATEST_VERSION);
+    }
 
     #[test]
     fn interrupted_pending_posts_become_failed() {

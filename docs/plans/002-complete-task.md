@@ -15,7 +15,7 @@ branch: feat/002-complete-task
 
 ## タスク
 
-- [ ] **T1: マイグレーションの仕組み**（FR-6 / AC-7, AC-8）
+- [x] **T1: マイグレーションの仕組み**（FR-6 / AC-7, AC-8）
   - `db.rs`: `MIGRATIONS`（版ごとの SQL の一覧）と `migrate()`。`PRAGMA user_version` を見て足りない版だけを1件ずつトランザクションで当てる
   - 版1 = 仕様001のスキーマ（`CREATE TABLE IF NOT EXISTS` なので既存 DB にも安全）、版2 = `ALTER TABLE tasks ADD COLUMN completed_at TEXT`
   - 単体テスト: 新規 DB が最新版になる / 仕様001の形の DB（版0・データあり）が版2に上がりデータが残る / 2回目の起動で何もしない
@@ -49,3 +49,4 @@ branch: feat/002-complete-task
 | 日付 | タスク | メモ |
 | --- | --- | --- |
 | 2026-09-25 | 計画作成 | |
+| 2026-09-25 | T1 | `PRAGMA user_version` による版管理。版1=仕様001のスキーマ、版2=`completed_at`。仕様001の形の DB が版2に上がりデータが残ることをテストで確認。テスト計39件 |
