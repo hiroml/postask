@@ -39,11 +39,11 @@ AI の呼び出しは `LlmProvider` トレイトの裏にあり、後でロー�
 | AC-3 思い付き | ✅ | 同上 → `idea`「タスクを付箋っぽく表示する」 |
 | AC-4 2つに分ける | ✅ | 同上 → `issue`「READMEを書く」「CIを設定する」 |
 | AC-5 メモはタスクにしない | ✅ | 同上 → `note` のみ。保存しないことは単体テスト `note_only_post_has_no_tasks_but_remains` |
-| AC-6 キー未設定でもポストできる | ⚠️ 人の確認 | 単体テストでは確認済み（`failure_marks_post_failed_and_keeps_it`, `missing_key_fails_without_network`）。画面での確認が必要 |
-| AC-7 キー設定後の再試行 | ⚠️ 人の確認 | 単体テスト `retry_after_failure_succeeds_and_clears_error`, `key_is_reloaded_when_missing_at_startup`。画面での確認が必要 |
-| AC-8 再起動後も表示 | ⚠️ 人の確認 | 単体テスト `data_survives_reopen`。画面での確認が必要 |
+| AC-6 キー未設定でもポストできる | ✅ | 単体テスト（`failure_marks_post_failed_and_keeps_it`, `missing_key_fails_without_network`）＋ 人が画面で確認（2026-09-25） |
+| AC-7 キー設定後の再試行 | ✅ | 単体テスト（`retry_after_failure_succeeds_and_clears_error`, `key_is_reloaded_when_missing_at_startup`）＋ 人が画面で確認（2026-09-25） |
+| AC-8 再起動後も表示 | ✅ | 単体テスト `data_survives_reopen` ＋ 人が画面で確認（2026-09-25） |
 | AC-9 モックでテスト | ✅ | `cargo test --workspace`（36件通過、API を呼ばない） |
-| AC-10 281文字でボタン無効 | ⚠️ 人の確認 | バックエンドの検証は単体テスト済み。画面での確認が必要 |
+| AC-10 281文字でボタン無効 | ✅ | バックエンドの検証は単体テスト済み ＋ 人が画面で確認（2026-09-25） |
 | AC-11 .env が git に入らない | ✅ | `git ls-files` に `.env` なし、`.env.example` あり。`git status --ignored` で `.env` が無視されている |
 
 ## 実行した検証
@@ -53,7 +53,8 @@ AI の呼び出しは `LlmProvider` トレイトの裏にあり、後でロー�
 - [x] `cargo test --workspace` — 36件通過（1件は API を呼ぶため通常は無視）
 - [x] `cargo test -p x-clone live_ -- --ignored --nocapture` — 実際の API で AC-1〜AC-5 の5件すべて期待どおり
 - [x] `trunk build`
-- [ ] `cargo tauri dev` で画面の動作確認 → **人にお願いします**（下の手順）
+- [x] `cargo tauri dev` で画面の動作確認 → 人が「動作確認手順」の全ケースを実施し、問題なし（2026-09-25）
+  - 確認の途中で一度「ポストボタンが押せない」状態になったが、再現できず、その後は解消。AI が実アプリ（WebView2）に接続して入力・IME・コマンド応答を検査した範囲では異常なし。原因は未特定
 
 ## 人に確認してほしいこと
 
