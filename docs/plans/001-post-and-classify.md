@@ -64,7 +64,7 @@ src/
   - `error.rs`, `models.rs`, `db.rs`: スキーマ作成、`PRAGMA foreign_keys = ON`、`insert_post` / `list_timeline(limit, before_id)` / `replace_tasks(post_id, tasks)` / `set_classify_status`
   - 単体テスト（インメモリ DB）: 保存・新しい順の取得・ページング・タスクの置き換え・ポスト削除でタスクも消えること
 
-- [ ] **T3: 種別の定義、LlmProvider、分類処理**（FR-3, FR-4, FR-8 / AC-5, AC-9）
+- [x] **T3: 種別の定義、LlmProvider、分類処理**（FR-3, FR-4, FR-8 / AC-5, AC-9）
   - `kind.rs`: `TaskKind`（issue / idea / research / note）と、表示名・AI への説明・タスクにするかどうかを1か所に定義（Q-005）
   - `llm/mod.rs`: `LlmProvider` トレイト、`ClassifiedTask`、`LlmError`
   - `llm/mock.rs`: 決まった結果やエラーを返す `MockProvider`
@@ -119,3 +119,4 @@ src/
 | 2026-09-25 | 計画作成 | 既存コードとの食い違いを Q-011 / Q-012 で解消 |
 | 2026-09-25 | T1 | 既存機能を削除し、モジュールの空ファイルと最小画面を作成。clippy・trunk build・test 通過 |
 | 2026-09-25 | T2 | reqwest 0.13 では機能名が `rustls-tls` から `rustls` に変わったのでそれを使用。DB 型で必要なため `kind.rs` と文字数チェックも前倒しで実装。テスト13件通過。T5 までは `dead_code` を一時的に許可 |
+| 2026-09-25 | T3 | LlmProvider / MockProvider / classify_post。AI の応答待ちの間は DB のロックを持たない。タイトルが空のタスクは保存しない。テスト計19件通過 |
