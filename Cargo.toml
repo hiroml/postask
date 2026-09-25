@@ -14,3 +14,12 @@ wasm-bindgen-futures = "0.4"
 [workspace]
 members = ["backend", "src-tauri"]
 resolver = "2"
+
+# ワークスペース全体のリリース用ビルド設定。各メンバー（src-tauri など）に書いても無視されるため、ここに置く（B-011）。
+# 詳細: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
