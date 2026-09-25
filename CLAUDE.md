@@ -51,6 +51,9 @@ cargo fmt --all
 - 公開 API（Tauri コマンドのシグネチャ）の破壊的変更
 - 仕様と実装が食い違うことに気づいたとき
 
+残課題・機能追加・改善・バグは [docs/backlog.md](docs/backlog.md)（バックログ）で管理し、**3件ずつのバッチ**で進める。
+作業中に見つけた問題や改善案は、その場で直さない場合は必ずバックログに起票する（`/backlog`）。
+
 不明点・判断が必要なことは [docs/questions.md](docs/questions.md)（判断待ちボード）に追加する。
 人の回答は `/apply-answers` で関連文書に反映する。回答を待たずに推奨案で決めてはいけない。
 
@@ -109,6 +112,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ## ドキュメント構成
 
 - [docs/README.md](docs/README.md) — ドキュメント全体の案内
+- [docs/backlog.md](docs/backlog.md) — バックログ（残課題・機能・改善・バグと状態、今回のバッチ）
 - [docs/questions.md](docs/questions.md) — 判断待ちボード（人への確認事項と決定の記録）
 - `docs/project/` — 概要・用語集・アーキテクチャ
 - `docs/specs/` — 機能仕様書
