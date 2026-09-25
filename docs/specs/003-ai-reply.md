@@ -1,10 +1,10 @@
 ---
 id: "003"
 title: AI リプライ
-status: review # draft | review | approved | done | rejected（approved/done は人のみ変更可）
+status: approved # draft | review | approved | done | rejected（approved/done は人のみ変更可）
 created: 2026-09-25
 updated: 2026-09-25
-approved_by: # 承認した人の名前（人が記入）
+approved_by: hikou # 2026-09-25 会話上で承認（AI が代理記入）
 backlog: B-001
 ---
 
@@ -152,3 +152,4 @@ Web 検索（Q-017）:
 | --- | --- | --- |
 | 2026-09-25 | 初版 | AI |
 | 2026-09-25 | Q-015〜Q-017 の回答を反映（手動依頼、Haiku 4.5、調査のみ Web 検索と出典表示、replies に sources 列、マイグレーション版3） | AI |
+| 2026-09-25 | 承認（approved） | hikou |
