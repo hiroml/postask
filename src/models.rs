@@ -47,10 +47,44 @@ pub struct Task {
     pub completed_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplyStatus {
+    Pending,
+    Done,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ReplySource {
+    pub title: String,
+    pub url: String,
+}
+
+/// ポストへのリプライ（仕様003）
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Reply {
+    pub author: String,
+    pub body: String,
+    pub sources: Vec<ReplySource>,
+    pub status: ReplyStatus,
+    pub error: Option<String>,
+}
+
+/// AI のリプライの `author`（バックエンドの db::AI_AUTHOR と同じ）
+pub const AI_AUTHOR: &str = "ai";
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PostWithTasks {
     pub post: Post,
     pub tasks: Vec<Task>,
+    pub replies: Vec<Reply>,
+}
+
+impl PostWithTasks {
+    pub fn ai_reply(&self) -> Option<&Reply> {
+        self.replies.iter().find(|r| r.author == AI_AUTHOR)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

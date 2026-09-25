@@ -258,6 +258,81 @@ button {
   color: #64748b;
 }
 
+/* AI リプライ（仕様003） */
+.ask-ai {
+  margin-top: 10px;
+}
+
+.ask-ai-button {
+  border: 1px solid #c4b5fd;
+  border-radius: 999px;
+  background: #f5f3ff;
+  color: #6d28d9;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 4px 14px;
+}
+
+.ask-ai-button:hover {
+  background: #ede9fe;
+}
+
+.ai-reply {
+  margin-top: 12px;
+  padding: 8px 0 8px 14px;
+  border-left: 3px solid #a78bfa;
+}
+
+.reply-author {
+  color: #6d28d9;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.reply-body {
+  margin: 0;
+  color: #1f2937;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.reply-status {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.reply-status.failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #b45309;
+}
+
+.reply-sources {
+  margin-top: 10px;
+  font-size: 0.85rem;
+}
+
+.reply-sources-title {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.reply-sources ul {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+}
+
+.reply-sources a {
+  color: #1d9bf0;
+  overflow-wrap: anywhere;
+}
+
 .empty {
   padding: 32px 20px;
   color: #94a3b8;

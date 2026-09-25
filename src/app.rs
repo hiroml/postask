@@ -4,11 +4,13 @@ use serde::de::IgnoredAny;
 use serde::Serialize;
 
 use crate::components::{Composer, PostCard};
-use crate::models::{ClassifyStatus, KindInfo, Post, PostWithTasks, Task, TaskStatus};
+use crate::models::{
+    ClassifyStatus, KindInfo, Post, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus, AI_AUTHOR,
+};
 use crate::tauri::{invoke, listen, NoArgs};
 
-/// バックエンドの commands::POST_CLASSIFIED_EVENT と同じ名前
-const POST_CLASSIFIED_EVENT: &str = "post-classified";
+/// バックエンドの commands::POST_UPDATED_EVENT と同じ名前（分類・AI リプライの完了で届く）
+const POST_UPDATED_EVENT: &str = "post-updated";
 const PAGE_SIZE: u32 = 50;
 
 #[derive(Serialize)]
@@ -18,7 +20,8 @@ struct ListTimelineArgs {
 }
 
 #[derive(Serialize)]
-struct RetryArgs {
+/// post_id だけを渡すコマンド用（retry_classification, request_ai_reply）
+struct PostIdArgs {
     post_id: i64,
 }
 
@@ -69,7 +72,7 @@ pub fn App() -> impl IntoView {
             Ok(k) => kinds.set(k),
             Err(e) => load_error.set(Some(e)),
         }
-        if let Err(e) = listen::<PostWithTasks>(POST_CLASSIFIED_EVENT, upsert).await {
+        if let Err(e) = listen::<PostWithTasks>(POST_UPDATED_EVENT, upsert).await {
             load_error.set(Some(format!("分類結果の受信を開始できませんでした: {e}")));
         }
         load_page(None);
@@ -84,6 +87,7 @@ pub fn App() -> impl IntoView {
                     PostWithTasks {
                         post,
                         tasks: Vec::new(),
+                        replies: Vec::new(),
                     },
                 );
             }
@@ -103,7 +107,7 @@ pub fn App() -> impl IntoView {
         set_status(post_id, ClassifyStatus::Pending, None);
         spawn_local(async move {
             if let Err(e) =
-                invoke::<_, IgnoredAny>("retry_classification", &RetryArgs { post_id }).await
+                invoke::<_, IgnoredAny>("retry_classification", &PostIdArgs { post_id }).await
             {
                 set_status(post_id, ClassifyStatus::Failed, Some(e));
             }
@@ -148,6 +152,34 @@ pub fn App() -> impl IntoView {
         });
     });
 
+    // AI のリプライを画面上で置き換える（無ければ追加）
+    let set_ai_reply = move |post_id: i64, status: ReplyStatus, error: Option<String>| {
+        posts.update(|list| {
+            if let Some(p) = list.iter_mut().find(|p| p.post.id == post_id) {
+                p.replies.retain(|r| r.author != AI_AUTHOR);
+                p.replies.push(Reply {
+                    author: AI_AUTHOR.to_string(),
+                    body: String::new(),
+                    sources: Vec::new(),
+                    status,
+                    error,
+                });
+            }
+        })
+    };
+
+    // AI にリプライを頼む（仕様003）。すぐ「考え中」を出し、結果は post-updated イベントで届く
+    let on_ask_ai = Callback::new(move |post_id: i64| {
+        set_ai_reply(post_id, ReplyStatus::Pending, None);
+        spawn_local(async move {
+            if let Err(e) =
+                invoke::<_, IgnoredAny>("request_ai_reply", &PostIdArgs { post_id }).await
+            {
+                set_ai_reply(post_id, ReplyStatus::Failed, Some(e));
+            }
+        });
+    });
+
     view! {
         <main class="page-shell">
             <section class="feed-panel">
@@ -174,6 +206,7 @@ pub fn App() -> impl IntoView {
                                     kinds=kinds
                                     on_retry=on_retry
                                     on_toggle_task=on_toggle_task
+                                    on_ask_ai=on_ask_ai
                                 />
                             }
                         })
