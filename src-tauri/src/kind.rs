@@ -14,7 +14,7 @@ pub enum TaskKind {
     Note,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct KindInfo {
     pub kind: TaskKind,
     /// 画面に出す名前

@@ -80,7 +80,7 @@ src/
     - API キー未設定なら、通信せずに「API キーが設定されていません」エラーを返す
   - 単体テスト（通信なし）: モデル別のリクエスト JSON、正常レスポンス、`refusal` / `max_tokens`、壊れた JSON、キー未設定
 
-- [ ] **T5: Tauri コマンドとイベント**（FR-1〜FR-3, FR-6 / AC-6, AC-7）
+- [x] **T5: Tauri コマンドとイベント**（FR-1〜FR-3, FR-6 / AC-6, AC-7）
   - `commands.rs`: `create_post`（280文字チェック → 保存 → 裏で分類開始）/ `list_timeline` / `retry_classification`
   - 分類の完了時（成功・失敗とも）に `post-classified` イベントで `PostWithTasks` を送る
   - `lib.rs`: DB と `Arc<dyn LlmProvider>` を状態として登録、コマンドを登録
@@ -121,3 +121,4 @@ src/
 | 2026-09-25 | T2 | reqwest 0.13 では機能名が `rustls-tls` から `rustls` に変わったのでそれを使用。DB 型で必要なため `kind.rs` と文字数チェックも前倒しで実装。テスト13件通過。T5 までは `dead_code` を一時的に許可 |
 | 2026-09-25 | T3 | LlmProvider / MockProvider / classify_post。AI の応答待ちの間は DB のロックを持たない。タイトルが空のタスクは保存しない。テスト計19件通過 |
 | 2026-09-25 | T4 | config.rs と ClaudeProvider。Opus 5 系は思考が既定で有効なため `max_tokens` を 4096 にした（Haiku は仕様どおり 1024）→ 確認依頼で報告する。タイムアウト・接続失敗も最大2回リトライ。テスト計31件通過 |
+| 2026-09-25 | T5 | コマンドとイベント、起動処理。仕様外の追加が2点（確認依頼で報告）: ① 種別の表示名・色をフロントに渡す `list_kinds` コマンド ② 起動時に中断された分類を failed にする処理。`dead_code` の一時許可を解除。テスト計35件通過 |

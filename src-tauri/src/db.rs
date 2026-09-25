@@ -172,10 +172,41 @@ pub fn set_classify_status(
     Ok(())
 }
 
+pub const INTERRUPTED_MESSAGE: &str = "アプリの終了により分類が中断されました";
+
+/// 起動時に呼ぶ。前回の終了時に分類中だったポストを failed にして、再試行できるようにする。
+pub fn fail_interrupted(conn: &Connection) -> AppResult<usize> {
+    Ok(conn.execute(
+        "UPDATE posts SET classify_status = ?1, classify_error = ?2 WHERE classify_status = ?3",
+        params![
+            ClassifyStatus::Failed,
+            INTERRUPTED_MESSAGE,
+            ClassifyStatus::Pending
+        ],
+    )?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::kind::TaskKind;
+
+    #[test]
+    fn interrupted_pending_posts_become_failed() {
+        let conn = open_in_memory().unwrap();
+        let pending = insert_post(&conn, "a").unwrap();
+        let done = insert_post(&conn, "b").unwrap();
+        set_classify_status(&conn, done.id, ClassifyStatus::Done, None).unwrap();
+
+        assert_eq!(fail_interrupted(&conn).unwrap(), 1);
+        let p = get_post(&conn, pending.id).unwrap();
+        assert_eq!(p.classify_status, ClassifyStatus::Failed);
+        assert_eq!(p.classify_error.as_deref(), Some(INTERRUPTED_MESSAGE));
+        assert_eq!(
+            get_post(&conn, done.id).unwrap().classify_status,
+            ClassifyStatus::Done
+        );
+    }
 
     fn task(kind: TaskKind, title: &str) -> ClassifiedTask {
         ClassifiedTask {
