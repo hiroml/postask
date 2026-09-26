@@ -15,7 +15,7 @@ branch: feat/006-tasks-page
 
 ## タスク
 
-- [ ] **T1: 集計（バックエンド）**（FR-2, FR-4, FR-9, FR-14, FR-16, FR-18 / AC-2, AC-9）
+- [x] **T1: 集計（バックエンド）**（FR-2, FR-4, FR-9, FR-14, FR-16, FR-18 / AC-2, AC-9）
   - `src-tauri/src/dashboard.rs`（新規）: `Period`、`TaskDashboard`、`get_task_dashboard(conn, period, kind, status, now)`
     - 現在時刻を引数で受け取り、日付の境目をテストできるようにする
     - 日ごと・週ごと（月曜始まり、ローカル時刻）の区切り
@@ -42,3 +42,4 @@ branch: feat/006-tasks-page
 | 日付 | タスク | メモ |
 | --- | --- | --- |
 | 2026-09-26 | 計画作成 | |
+| 2026-09-26 | T1 | `dashboard.rs` と `get_task_dashboard` コマンド。**仕様からの変更**: 日付の区切りをパソコンのタイムゾーン（FR-18）で正しく数えるため、SQL の GROUP BY ではなく、タスクを SQL でまとめて読んで Rust で集計する（集計はバックエンドで行う点は仕様どおり）。現在時刻とタイムゾーンを引数にして、日付の境目（日本時間 0:30 = UTC 前日）もテスト。単体テスト11件、計74件 |

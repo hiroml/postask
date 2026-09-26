@@ -6,9 +6,10 @@ use rusqlite::Connection;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::classify::{self, lock};
+use crate::dashboard::{self, Period, TaskDashboard};
 use crate::db;
 use crate::error::{AppError, AppResult};
-use crate::kind::{KindInfo, KINDS};
+use crate::kind::{KindInfo, TaskKind, KINDS};
 use crate::llm::LlmProvider;
 use crate::models::{validate_post_body, ClassifyStatus, Post, PostWithTasks, TaskStatus};
 use crate::reply;
@@ -114,6 +115,18 @@ pub fn request_ai_reply(app: AppHandle, state: State<'_, AppState>, post_id: i64
         }
     });
     Ok(())
+}
+
+/// 課題ページの集計（仕様006）。期間・種別・状態で絞り込む（None = すべて）。
+#[tauri::command(rename_all = "snake_case")]
+pub fn get_task_dashboard(
+    state: State<'_, AppState>,
+    period: Period,
+    kind: Option<TaskKind>,
+    status: Option<TaskStatus>,
+) -> AppResult<TaskDashboard> {
+    let c = lock(&state.db)?;
+    dashboard::get_task_dashboard(&c, period, kind, status)
 }
 
 /// 種別の表示名と色（kind.rs の定義）を返す。

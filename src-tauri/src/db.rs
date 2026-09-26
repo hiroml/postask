@@ -244,6 +244,22 @@ fn with_details(conn: &Connection, post: Post) -> AppResult<PostWithTasks> {
     })
 }
 
+/// すべてのタスクと、元のポストの本文を返す（課題ページの集計用、仕様006）
+pub fn all_tasks_with_post_body(conn: &Connection) -> AppResult<Vec<(Task, String)>> {
+    let columns = TASK_COLUMNS
+        .split(", ")
+        .map(|c| format!("t.{c}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {columns}, p.body FROM tasks t JOIN posts p ON p.id = t.post_id"
+    ))?;
+    let rows = stmt
+        .query_map([], |row| Ok((task_from_row(row)?, row.get(9)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 pub fn get_post_with_tasks(conn: &Connection, post_id: i64) -> AppResult<PostWithTasks> {
     let post = get_post(conn, post_id)?;
     with_details(conn, post)

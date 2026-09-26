@@ -1,6 +1,7 @@
 mod classify;
 mod commands;
 mod config;
+mod dashboard;
 mod db;
 mod error;
 mod kind;
@@ -73,6 +74,7 @@ pub fn run() {
             commands::request_ai_reply,
             commands::list_kinds,
             commands::app_info,
+            commands::get_task_dashboard,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
