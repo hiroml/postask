@@ -1,7 +1,7 @@
 ---
 id: "004"
 title: 開発用 DB の分離
-status: approved # draft | review | approved | done | rejected（approved/done は人のみ変更可）
+status: done # draft | review | approved | done | rejected（approved/done は人のみ変更可）
 created: 2026-09-26
 updated: 2026-09-26
 approved_by: hikou # 2026-09-26 会話上で承認（AI が代理記入）
@@ -83,3 +83,4 @@ AI が開発版で動作確認するときも `x-clone-dev.sqlite` を使う。
 | 2026-09-26 | 初版 | AI |
 | 2026-09-26 | Q-023 の回答を反映（初回だけ普段使いの DB をコピー） | AI |
 | 2026-09-26 | 承認（approved） | hikou |
+| 2026-09-26 | 実装完了・確認済み（done） | hikou |

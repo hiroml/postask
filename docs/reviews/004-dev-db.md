@@ -3,7 +3,7 @@ id: "004"
 spec: ../specs/004-dev-db.md
 plan: ../plans/004-dev-db.md
 branch: feat/004-dev-db（feat/006-tasks-page に含まれる）
-status: pending # pending | changes-requested | approved（approved は人のみ）
+status: approved # pending | changes-requested | approved（approved は人のみ）
 requested: 2026-09-26
 ---
 
@@ -49,5 +49,5 @@ requested: 2026-09-26
 
 <!-- 人が記入 -->
 
-- 判定: <!-- approved / changes-requested -->
-- コメント:
+- 判定: approved（hikou 記入:「完了」）
+- コメント:　異常なし

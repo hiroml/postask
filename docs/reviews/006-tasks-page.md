@@ -3,7 +3,7 @@ id: "006"
 spec: ../specs/006-tasks-page.md
 plan: ../plans/006-tasks-page.md
 branch: feat/006-tasks-page
-status: pending # pending | changes-requested | approved（approved は人のみ）
+status: approved # pending | changes-requested | approved（approved は人のみ）
 requested: 2026-09-26
 ---
 
@@ -73,5 +73,5 @@ requested: 2026-09-26
 
 <!-- 人が記入 -->
 
-- 判定: <!-- approved / changes-requested -->
-- コメント:
+- 判定: approved（hikou 記入:「異常なし」）
+- コメント: 完了

@@ -3,7 +3,7 @@ id: "005"
 spec: ../specs/005-navigation.md
 plan: ../plans/005-navigation.md
 branch: feat/005-navigation（feat/006-tasks-page に含まれる）
-status: pending # pending | changes-requested | approved（approved は人のみ）
+status: approved # pending | changes-requested | approved（approved は人のみ）
 requested: 2026-09-26
 ---
 
@@ -63,5 +63,5 @@ requested: 2026-09-26
 
 <!-- 人が記入 -->
 
-- 判定: <!-- approved / changes-requested -->
-- コメント:
+- 判定: approved（hikou 記入:「異常なし」）
+- コメント:完了
