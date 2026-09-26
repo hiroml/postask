@@ -33,11 +33,201 @@ button {
   cursor: pointer;
 }
 
-.page-shell {
-  max-width: 720px;
-  margin: 0 auto;
+/* 全体のレイアウト: 左にメニュー、右にページ（仕様005） */
+.app-layout {
+  display: flex;
+  justify-content: center;
   min-height: 100vh;
-  padding: 0 16px;
+}
+
+.page-area {
+  flex: 1;
+  min-width: 0;
+  max-width: 720px;
+}
+
+/* メニュー */
+.nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  height: 100vh;
+  padding: 16px 12px;
+  flex-shrink: 0;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 12px 16px;
+}
+
+.nav-brand-name {
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: #0f172a;
+  font-size: 1.05rem;
+  text-decoration: none;
+}
+
+.nav-item:hover {
+  background: #eef2f6;
+}
+
+.nav-item:focus-visible {
+  outline: 2px solid #1d9bf0;
+  outline-offset: 2px;
+}
+
+/* 今いるページ（leptos_router が aria-current="page" を付ける） */
+.nav-item[aria-current="page"] {
+  background: #eaf3ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+/* 中身がまだ無いページ（Q-022） */
+.nav-item.coming-soon {
+  opacity: 0.55;
+}
+
+.nav-icon {
+  width: 1.5em;
+  text-align: center;
+  font-size: 1.15rem;
+}
+
+/* アカウントメニュー */
+.account {
+  position: relative;
+  margin-top: auto;
+}
+
+.account-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #0f172a;
+  text-align: left;
+}
+
+.account-button:hover {
+  background: #eef2f6;
+}
+
+.account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.account-name {
+  flex: 1;
+  font-weight: 700;
+}
+
+.account-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.account-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 11;
+  display: grid;
+  min-width: 200px;
+  padding: 8px 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.account-popup-item {
+  padding: 10px 16px;
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.account-popup-item:hover,
+.account-popup-item:focus-visible {
+  background: #f1f5f9;
+}
+
+/* 準備中ページ */
+.coming-soon-body {
+  padding: 24px 20px;
+  color: #475569;
+}
+
+.coming-soon-lead {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.coming-soon-plans {
+  padding-left: 1.2em;
+  line-height: 1.9;
+}
+
+/* 幅が狭いときはアイコンだけのメニュー（FR-4） */
+@media (max-width: 999px) {
+  .nav {
+    width: 72px;
+    padding: 16px 8px;
+    align-items: center;
+  }
+
+  .nav-label,
+  .nav-brand-name {
+    display: none;
+  }
+
+  .nav-brand {
+    padding: 4px 0 16px;
+    justify-content: center;
+  }
+
+  .nav-item,
+  .account-button {
+    justify-content: center;
+    padding: 10px;
+  }
 }
 
 .feed-panel {
@@ -361,10 +551,6 @@ button {
 }
 
 @media (max-width: 720px) {
-  .page-shell {
-    padding: 0;
-  }
-
   .feed-panel {
     border-left: none;
     border-right: none;

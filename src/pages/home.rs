@@ -15,11 +15,6 @@ pub fn HomePage() -> impl IntoView {
         <section class="feed-panel">
             <header class="feed-header">
                 <h1>"ホーム"</h1>
-                <Show when=move || store.is_dev.get()>
-                    <span class="dev-badge" title="開発用の DB（x-clone-dev.sqlite）を使っています">
-                        "開発版"
-                    </span>
-                </Show>
             </header>
 
             <Composer draft=store.draft on_posted=store.on_posted />
