@@ -70,7 +70,24 @@ pub struct Post {
     pub created_at: String,
     pub classify_status: ClassifyStatus,
     pub classify_error: Option<String>,
+    /// 普段のポストか、話題として投稿したものか（仕様008）
+    pub kind: PostKind,
 }
+
+/// ポストの種類（仕様008）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PostKind {
+    /// 普段のポスト（タスクに分類する）
+    Post,
+    /// 話題として投稿したもの（本文が話題の概要。タスクには分類しない）
+    Topic,
+}
+
+sql_text_enum!(PostKind, "ポストの種類", {
+    Post => "post",
+    Topic => "topic",
+});
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Task {
@@ -128,6 +145,47 @@ pub struct PostWithTasks {
     pub post: Post,
     pub tasks: Vec<Task>,
     pub replies: Vec<Reply>,
+    /// ポストに付いた話題（外したものは含まない。仕様008）
+    pub topics: Vec<TopicRef>,
+}
+
+/// 話題の名前の最大文字数（仕様008 FR-1）
+pub const MAX_TOPIC_NAME_CHARS: usize = 20;
+/// 1つのポストに付ける話題の最大数（仕様008 FR-4）
+pub const MAX_TOPICS_PER_POST: usize = 3;
+
+/// 話題（一覧用に件数つき。仕様008）
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Topic {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub source_post_id: Option<i64>,
+    pub created_at: String,
+    pub post_count: u32,
+    pub open_task_count: u32,
+}
+
+/// ポストに付いた話題（チップの表示用）
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TopicRef {
+    pub id: i64,
+    pub name: String,
+}
+
+/// AI に渡す話題（分類・振り分け直し用）
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TopicBrief {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+}
+
+/// AI の分類結果: タスクと、当てはまる話題の id
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Classification {
+    pub tasks: Vec<ClassifiedTask>,
+    pub topic_ids: Vec<i64>,
 }
 
 /// AI がポストから読み取ったタスク1件。`note` も含む。
@@ -149,6 +207,21 @@ pub fn validate_post_body(body: &str) -> Result<&str, String> {
     if count > MAX_POST_CHARS {
         return Err(format!(
             "ポストは{MAX_POST_CHARS}文字以内で入力してください（現在{count}文字）"
+        ));
+    }
+    Ok(trimmed)
+}
+
+/// 話題の名前の前後の空白を除き、1〜MAX_TOPIC_NAME_CHARS 文字であることを確かめる（仕様008 FR-1）。
+pub fn validate_topic_name(name: &str) -> Result<&str, String> {
+    let trimmed = name.trim();
+    let count = trimmed.chars().count();
+    if count == 0 {
+        return Err("話題の名前を入力してください".to_string());
+    }
+    if count > MAX_TOPIC_NAME_CHARS {
+        return Err(format!(
+            "話題の名前は{MAX_TOPIC_NAME_CHARS}文字以内で入力してください（現在{count}文字）"
         ));
     }
     Ok(trimmed)

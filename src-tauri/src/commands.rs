@@ -11,8 +11,12 @@ use crate::db;
 use crate::error::{AppError, AppResult};
 use crate::kind::{KindInfo, TaskKind, KINDS};
 use crate::llm::LlmProvider;
-use crate::models::{validate_post_body, ClassifyStatus, Post, PostWithTasks, TaskStatus};
+use crate::models::{
+    validate_post_body, validate_topic_name, ClassifyStatus, Post, PostWithTasks, TaskStatus,
+    Topic, MAX_POST_CHARS,
+};
 use crate::reply;
+use crate::topics::{self, CreatedTopic};
 
 /// ポストの状態が裏の処理で変わったとき（分類・AI リプライの完了。成功・失敗とも）に送るイベント。
 /// payload は `PostWithTasks`（仕様003 で `post-classified` から改名）。
@@ -115,6 +119,75 @@ pub fn request_ai_reply(app: AppHandle, state: State<'_, AppState>, post_id: i64
         }
     });
     Ok(())
+}
+
+// ---- 話題（仕様008） ----
+
+/// 話題として投稿する本文から、話題の名前を提案する（FR-2）
+#[tauri::command(rename_all = "snake_case")]
+pub async fn suggest_topic_name(state: State<'_, AppState>, body: String) -> AppResult<String> {
+    let llm = Arc::clone(&state.llm);
+    topics::suggest_name(llm.as_ref(), &body).await
+}
+
+/// 話題を作る（FR-1〜FR-3）。`body` があれば「話題として投稿」、無ければ話題ページから。
+/// 作ったあと、直近のポストの振り分け直しを裏で行い、話題が付いたポストを `post-updated` で知らせる（FR-6）。
+#[tauri::command(rename_all = "snake_case")]
+pub fn create_topic(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    description: String,
+    body: Option<String>,
+) -> AppResult<CreatedTopic> {
+    let created = topics::create(&state.db, &name, &description, body.as_deref())?;
+    let topic_id = created.topic.id;
+    let db = Arc::clone(&state.db);
+    let llm = Arc::clone(&state.llm);
+    tauri::async_runtime::spawn(async move {
+        match topics::rematch(&db, llm.as_ref(), topic_id).await {
+            Ok(updated) => updated.into_iter().for_each(|p| emit_post_updated(&app, p)),
+            Err(e) => eprintln!("話題 {topic_id} の振り分け直しに失敗しました: {e}"),
+        }
+    });
+    Ok(created)
+}
+
+#[tauri::command]
+pub fn list_topics(state: State<'_, AppState>) -> AppResult<Vec<Topic>> {
+    let c = lock(&state.db)?;
+    db::list_topics(&c)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn update_topic(
+    state: State<'_, AppState>,
+    topic_id: i64,
+    name: String,
+    description: String,
+) -> AppResult<Topic> {
+    let name = validate_topic_name(&name).map_err(AppError::Validation)?;
+    let description: String = description.trim().chars().take(MAX_POST_CHARS).collect();
+    let c = lock(&state.db)?;
+    db::update_topic(&c, topic_id, name, &description)
+}
+
+/// 話題を削除する。ポストとタスクは残る（FR-11）
+#[tauri::command(rename_all = "snake_case")]
+pub fn delete_topic(state: State<'_, AppState>, topic_id: i64) -> AppResult<()> {
+    let c = lock(&state.db)?;
+    db::delete_topic(&c, topic_id)
+}
+
+/// ポストから話題を外す（FR-9）。外した話題は AI が付け直さない
+#[tauri::command(rename_all = "snake_case")]
+pub fn remove_post_topic(
+    state: State<'_, AppState>,
+    post_id: i64,
+    topic_id: i64,
+) -> AppResult<PostWithTasks> {
+    let c = lock(&state.db)?;
+    db::remove_post_topic(&c, post_id, topic_id)
 }
 
 /// 課題ページの集計（仕様006）。期間・種別・状態で絞り込む（None = すべて）。

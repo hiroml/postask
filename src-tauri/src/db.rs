@@ -4,8 +4,8 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row};
 
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    now, ClassifiedTask, ClassifyStatus, Post, PostWithTasks, Reply, ReplySource, ReplyStatus,
-    Task, TaskStatus,
+    now, ClassifiedTask, ClassifyStatus, Post, PostKind, PostWithTasks, Reply, ReplySource,
+    ReplyStatus, Task, TaskStatus, Topic, TopicBrief, TopicRef,
 };
 
 pub const DB_FILE_NAME: &str = "x-clone.sqlite";
@@ -103,6 +103,26 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_replies_post_id ON replies(post_id);
     "#,
+    // 版4: 仕様008 話題
+    r#"
+    CREATE TABLE topics (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      name           TEXT    NOT NULL UNIQUE,
+      description    TEXT    NOT NULL DEFAULT '',
+      source_post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      created_at     TEXT    NOT NULL
+    );
+    CREATE TABLE post_topics (
+      post_id     INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      topic_id    INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+      assigned_by TEXT    NOT NULL,
+      removed     INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT    NOT NULL,
+      PRIMARY KEY (post_id, topic_id)
+    );
+    CREATE INDEX idx_post_topics_topic_id ON post_topics(topic_id);
+    ALTER TABLE posts ADD COLUMN kind TEXT NOT NULL DEFAULT 'post';
+    "#,
 ];
 
 #[cfg(test)]
@@ -144,7 +164,7 @@ fn init(conn: &mut Connection) -> AppResult<()> {
     migrate(conn)
 }
 
-const POST_COLUMNS: &str = "id, body, created_at, classify_status, classify_error";
+const POST_COLUMNS: &str = "id, body, created_at, classify_status, classify_error, kind";
 const TASK_COLUMNS: &str =
     "id, post_id, kind, title, target, action, status, created_at, completed_at";
 
@@ -155,6 +175,7 @@ fn post_from_row(row: &Row<'_>) -> rusqlite::Result<Post> {
         created_at: row.get(2)?,
         classify_status: row.get(3)?,
         classify_error: row.get(4)?,
+        kind: row.get(5)?,
     })
 }
 
@@ -237,10 +258,12 @@ fn replies_of(conn: &Connection, post_id: i64) -> AppResult<Vec<Reply>> {
 fn with_details(conn: &Connection, post: Post) -> AppResult<PostWithTasks> {
     let tasks = tasks_of(conn, post.id)?;
     let replies = replies_of(conn, post.id)?;
+    let topics = topics_of(conn, post.id)?;
     Ok(PostWithTasks {
         post,
         tasks,
         replies,
+        topics,
     })
 }
 
@@ -389,6 +412,207 @@ pub fn set_task_status(
             r.get(0)
         })?;
     get_post_with_tasks(conn, post_id)
+}
+
+// ---- 話題（仕様008） ----
+
+/// ポストの付け方: AI が付けた / 人が操作した
+const ASSIGNED_BY_AI: &str = "ai";
+const ASSIGNED_BY_USER: &str = "user";
+
+fn topics_of(conn: &Connection, post_id: i64) -> AppResult<Vec<TopicRef>> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT t.id, t.name FROM post_topics pt JOIN topics t ON t.id = pt.topic_id
+         WHERE pt.post_id = ?1 AND pt.removed = 0 ORDER BY t.name",
+    )?;
+    let topics = stmt
+        .query_map([post_id], |r| {
+            Ok(TopicRef {
+                id: r.get(0)?,
+                name: r.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(topics)
+}
+
+/// 話題として投稿したポストを保存する。タスクには分類しないので、分類状態は最初から done。
+pub fn insert_topic_post(conn: &Connection, body: &str) -> AppResult<Post> {
+    conn.execute(
+        "INSERT INTO posts (body, created_at, classify_status, kind) VALUES (?1, ?2, ?3, ?4)",
+        params![body, now(), ClassifyStatus::Done, PostKind::Topic],
+    )?;
+    get_post(conn, conn.last_insert_rowid())
+}
+
+fn topic_name_taken(conn: &Connection, name: &str, except_id: Option<i64>) -> AppResult<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM topics WHERE name = ?1 AND (?2 IS NULL OR id != ?2))",
+        params![name, except_id],
+        |r| r.get(0),
+    )?)
+}
+
+/// 話題を作る。名前は検証済みのものを渡す。同じ名前があればエラー。
+pub fn create_topic(
+    conn: &Connection,
+    name: &str,
+    description: &str,
+    source_post_id: Option<i64>,
+) -> AppResult<Topic> {
+    if topic_name_taken(conn, name, None)? {
+        return Err(AppError::Validation(format!(
+            "「{name}」という話題はすでにあります"
+        )));
+    }
+    conn.execute(
+        "INSERT INTO topics (name, description, source_post_id, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![name, description, source_post_id, now()],
+    )?;
+    get_topic(conn, conn.last_insert_rowid())
+}
+
+const TOPIC_SELECT: &str = "
+    SELECT t.id, t.name, t.description, t.source_post_id, t.created_at,
+      (SELECT COUNT(*) FROM post_topics pt WHERE pt.topic_id = t.id AND pt.removed = 0),
+      (SELECT COUNT(*) FROM post_topics pt JOIN tasks k ON k.post_id = pt.post_id
+         WHERE pt.topic_id = t.id AND pt.removed = 0 AND k.status = 'open')
+    FROM topics t";
+
+fn topic_from_row(r: &Row<'_>) -> rusqlite::Result<Topic> {
+    Ok(Topic {
+        id: r.get(0)?,
+        name: r.get(1)?,
+        description: r.get(2)?,
+        source_post_id: r.get(3)?,
+        created_at: r.get(4)?,
+        post_count: r.get(5)?,
+        open_task_count: r.get(6)?,
+    })
+}
+
+pub fn get_topic(conn: &Connection, topic_id: i64) -> AppResult<Topic> {
+    conn.query_row(
+        &format!("{TOPIC_SELECT} WHERE t.id = ?1"),
+        [topic_id],
+        topic_from_row,
+    )
+    .optional()?
+    .ok_or(AppError::TopicNotFound(topic_id))
+}
+
+/// 話題の一覧（新しい順、ポスト数・未完了のタスク数つき）
+pub fn list_topics(conn: &Connection) -> AppResult<Vec<Topic>> {
+    let mut stmt = conn.prepare(&format!("{TOPIC_SELECT} ORDER BY t.id DESC"))?;
+    let topics = stmt
+        .query_map([], topic_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(topics)
+}
+
+pub fn update_topic(
+    conn: &Connection,
+    topic_id: i64,
+    name: &str,
+    description: &str,
+) -> AppResult<Topic> {
+    if topic_name_taken(conn, name, Some(topic_id))? {
+        return Err(AppError::Validation(format!(
+            "「{name}」という話題はすでにあります"
+        )));
+    }
+    let updated = conn.execute(
+        "UPDATE topics SET name = ?1, description = ?2 WHERE id = ?3",
+        params![name, description, topic_id],
+    )?;
+    if updated == 0 {
+        return Err(AppError::TopicNotFound(topic_id));
+    }
+    get_topic(conn, topic_id)
+}
+
+/// 話題を削除する。ポストとタスクは消えない（振り分けだけ消える、FR-11）
+pub fn delete_topic(conn: &Connection, topic_id: i64) -> AppResult<()> {
+    let deleted = conn.execute("DELETE FROM topics WHERE id = ?1", [topic_id])?;
+    if deleted == 0 {
+        return Err(AppError::TopicNotFound(topic_id));
+    }
+    Ok(())
+}
+
+/// 分類のときに AI に渡す話題。最近使われた順（まだ使われていない話題は新しい順）に最大 `limit` 件（NFR-1）
+pub fn topics_for_ai(conn: &Connection, limit: u32) -> AppResult<Vec<TopicBrief>> {
+    let mut stmt = conn.prepare(
+        "SELECT t.id, t.name, t.description FROM topics t
+         ORDER BY (SELECT MAX(pt.created_at) FROM post_topics pt WHERE pt.topic_id = t.id AND pt.removed = 0) DESC,
+                  t.id DESC
+         LIMIT ?1",
+    )?;
+    let topics = stmt
+        .query_map([limit], |r| {
+            Ok(TopicBrief {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                description: r.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(topics)
+}
+
+/// 分類の結果として、AI が選んだ話題をポストに付け直す。
+/// 前回 AI が付けた話題は外し、人が外した話題（removed）は付け直さない。
+pub fn set_ai_topics(conn: &mut Connection, post_id: i64, topic_ids: &[i64]) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    tx.execute(
+        "DELETE FROM post_topics WHERE post_id = ?1 AND assigned_by = ?2 AND removed = 0",
+        params![post_id, ASSIGNED_BY_AI],
+    )?;
+    let created_at = now();
+    for topic_id in topic_ids {
+        // すでに行がある（人が外した）ときは何もしない
+        tx.execute(
+            "INSERT OR IGNORE INTO post_topics (post_id, topic_id, assigned_by, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![post_id, topic_id, ASSIGNED_BY_AI, created_at],
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+/// 振り分け直し（話題を作ったとき、FR-6）で、ポストに話題を1つ足す。すでに付いている・外されたときは何もしない。
+pub fn add_ai_topic(conn: &Connection, post_id: i64, topic_id: i64) -> AppResult<bool> {
+    let inserted = conn.execute(
+        "INSERT OR IGNORE INTO post_topics (post_id, topic_id, assigned_by, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![post_id, topic_id, ASSIGNED_BY_AI, now()],
+    )?;
+    Ok(inserted > 0)
+}
+
+/// ポストから話題を外す（FR-9）。AI が付け直さないよう、行は残して removed にする。
+pub fn remove_post_topic(
+    conn: &Connection,
+    post_id: i64,
+    topic_id: i64,
+) -> AppResult<PostWithTasks> {
+    get_post(conn, post_id)?;
+    get_topic(conn, topic_id)?;
+    conn.execute(
+        "INSERT INTO post_topics (post_id, topic_id, assigned_by, removed, created_at) VALUES (?1, ?2, ?3, 1, ?4)
+         ON CONFLICT (post_id, topic_id) DO UPDATE SET removed = 1, assigned_by = ?3",
+        params![post_id, topic_id, ASSIGNED_BY_USER, now()],
+    )?;
+    get_post_with_tasks(conn, post_id)
+}
+
+/// 振り分け直しの対象: 普段のポスト（話題として投稿したものを除く）の新しい順
+pub fn recent_posts_for_matching(conn: &Connection, limit: u32) -> AppResult<Vec<(i64, String)>> {
+    let mut stmt =
+        conn.prepare("SELECT id, body FROM posts WHERE kind = 'post' ORDER BY id DESC LIMIT ?1")?;
+    let posts = stmt
+        .query_map([limit], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(posts)
 }
 
 pub const INTERRUPTED_MESSAGE: &str = "アプリの終了により分類が中断されました";

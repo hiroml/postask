@@ -6,7 +6,7 @@ pub mod mock;
 
 use async_trait::async_trait;
 
-use crate::models::{ClassifiedTask, ReplySource, Task};
+use crate::models::{Classification, ReplySource, Task, TopicBrief};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LlmError {
@@ -39,8 +39,23 @@ pub struct AiReply {
 
 #[async_trait]
 pub trait LlmProvider: Send + Sync {
-    /// ポスト本文を読み、含まれるタスクを返す（`note` も含めて返してよい）。
-    async fn classify(&self, post_body: &str) -> Result<Vec<ClassifiedTask>, LlmError>;
+    /// ポスト本文を読み、含まれるタスク（`note` も含めて返してよい）と、当てはまる話題の id を返す。
+    /// `topics` が空なら話題の判定はしない（仕様008 FR-7）。
+    async fn classify(
+        &self,
+        post_body: &str,
+        topics: &[TopicBrief],
+    ) -> Result<Classification, LlmError>;
+
+    /// 話題として投稿された本文から、話題の名前を1つ提案する（仕様008 FR-2）。
+    async fn suggest_topic_name(&self, body: &str) -> Result<String, LlmError>;
+
+    /// 新しい話題に当てはまるポストの id を返す（振り分け直し、仕様008 FR-6）。`posts` は (id, 本文)。
+    async fn match_posts_to_topic(
+        &self,
+        topic: &TopicBrief,
+        posts: &[(i64, String)],
+    ) -> Result<Vec<i64>, LlmError>;
 
     /// リプライに使うモデル名（記録用）。
     fn reply_model(&self) -> String;

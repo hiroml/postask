@@ -8,6 +8,7 @@ mod kind;
 mod llm;
 mod models;
 mod reply;
+mod topics;
 
 use std::sync::{Arc, Mutex};
 
@@ -75,6 +76,12 @@ pub fn run() {
             commands::list_kinds,
             commands::app_info,
             commands::get_task_dashboard,
+            commands::suggest_topic_name,
+            commands::create_topic,
+            commands::list_topics,
+            commands::update_topic,
+            commands::delete_topic,
+            commands::remove_post_topic,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

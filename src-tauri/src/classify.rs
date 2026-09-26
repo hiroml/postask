@@ -7,7 +7,9 @@ use rusqlite::Connection;
 use crate::db;
 use crate::error::{AppError, AppResult};
 use crate::llm::LlmProvider;
-use crate::models::{ClassifiedTask, ClassifyStatus, PostWithTasks};
+use crate::models::{
+    ClassifiedTask, ClassifyStatus, PostKind, PostWithTasks, TopicBrief, MAX_TOPICS_PER_POST,
+};
 
 pub fn lock(conn: &Mutex<Connection>) -> AppResult<MutexGuard<'_, Connection>> {
     conn.lock()
@@ -22,6 +24,22 @@ fn tasks_to_save(tasks: Vec<ClassifiedTask>) -> Vec<ClassifiedTask> {
         .collect()
 }
 
+/// 分類のときに AI に渡す話題の最大数（仕様008 NFR-1）
+pub const MAX_TOPICS_FOR_AI: u32 = 50;
+
+/// AI が選んだ話題のうち、渡した話題にあるものだけを、重複なく最大3個残す（仕様008 FR-4）。
+/// 知らない id は捨てるだけで、分類の失敗にはしない（NFR-2）。
+fn topics_to_save(ids: &[i64], topics: &[TopicBrief]) -> Vec<i64> {
+    let mut out = Vec::new();
+    for id in ids {
+        if topics.iter().any(|t| t.id == *id) && !out.contains(id) {
+            out.push(*id);
+        }
+    }
+    out.truncate(MAX_TOPICS_PER_POST);
+    out
+}
+
 /// ポストを分類して結果を保存し、最新の状態を返す。
 ///
 /// AI の失敗はエラーにせず、ポストを `failed` にして返す（ポスト自体は残す）。
@@ -31,19 +49,25 @@ pub async fn classify_post(
     provider: &dyn LlmProvider,
     post_id: i64,
 ) -> AppResult<PostWithTasks> {
-    let body = {
+    let (body, topics) = {
         let c = lock(conn)?;
         let post = db::get_post(&c, post_id)?;
+        // 話題として投稿したものはタスクに分類しない（仕様008 FR-3）
+        if post.kind == PostKind::Topic {
+            return db::get_post_with_tasks(&c, post_id);
+        }
         db::set_classify_status(&c, post_id, ClassifyStatus::Pending, None)?;
-        post.body
+        (post.body, db::topics_for_ai(&c, MAX_TOPICS_FOR_AI)?)
     };
 
-    let result = provider.classify(&body).await;
+    let result = provider.classify(&body, &topics).await;
 
     let mut c = lock(conn)?;
     match result {
-        Ok(tasks) => {
-            db::replace_tasks(&mut c, post_id, &tasks_to_save(tasks))?;
+        Ok(classification) => {
+            db::replace_tasks(&mut c, post_id, &tasks_to_save(classification.tasks))?;
+            let topic_ids = topics_to_save(&classification.topic_ids, &topics);
+            db::set_ai_topics(&mut c, post_id, &topic_ids)?;
             db::set_classify_status(&c, post_id, ClassifyStatus::Done, None)?;
         }
         Err(e) => {
