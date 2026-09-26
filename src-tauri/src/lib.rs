@@ -3,6 +3,7 @@ mod commands;
 mod config;
 mod dashboard;
 mod db;
+mod derive;
 mod error;
 mod kind;
 mod llm;
@@ -72,6 +73,7 @@ pub fn run() {
             commands::list_timeline,
             commands::retry_classification,
             commands::set_task_status,
+            commands::suggest_derived_tasks,
             commands::request_ai_reply,
             commands::list_kinds,
             commands::app_info,

@@ -6,7 +6,7 @@ pub mod mock;
 
 use async_trait::async_trait;
 
-use crate::models::{Classification, ReplySource, Task, TopicBrief};
+use crate::models::{Classification, DerivedSuggestion, ReplySource, Task, TopicBrief};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LlmError {
@@ -68,4 +68,13 @@ pub trait LlmProvider: Send + Sync {
         tasks: &[Task],
         use_web_search: bool,
     ) -> Result<AiReply, LlmError>;
+
+    /// ポスト・そのタスク・AI のリプライから、関連タスクの候補を返す（仕様009 FR-1b）。
+    /// 候補の `task_id` は `tasks` のどれかであるべきだが、呼び出し側でも確かめる。
+    async fn suggest_derived_tasks(
+        &self,
+        post_body: &str,
+        tasks: &[Task],
+        reply_body: &str,
+    ) -> Result<Vec<DerivedSuggestion>, LlmError>;
 }

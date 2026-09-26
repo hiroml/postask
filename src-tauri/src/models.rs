@@ -72,6 +72,8 @@ pub struct Post {
     pub classify_error: Option<String>,
     /// 普段のポストか、話題として投稿したものか（仕様008）
     pub kind: PostKind,
+    /// 派生ポストのとき、元のタスクの id（仕様009）
+    pub parent_task_id: Option<i64>,
 }
 
 /// ポストの種類（仕様008）
@@ -101,6 +103,30 @@ pub struct Task {
     pub created_at: String,
     /// 完了日時（未完了なら None）。仕様002
     pub completed_at: Option<String>,
+    /// このタスクから派生したタスク（子）の数と完了数（仕様009）
+    pub children: ChildCount,
+}
+
+/// 子のタスクの数（仕様009 FR-5）
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct ChildCount {
+    pub total: u32,
+    pub done: u32,
+}
+
+/// 派生ポストの元のタスク（仕様009 FR-3）
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ParentRef {
+    pub task_id: i64,
+    pub title: String,
+}
+
+/// AI が出した関連タスクの候補（仕様009 FR-1b）
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DerivedSuggestion {
+    pub text: String,
+    /// 親にするタスク（そのポストのタスクのどれか）
+    pub task_id: i64,
 }
 
 /// リプライの状態（仕様003）
@@ -147,6 +173,8 @@ pub struct PostWithTasks {
     pub replies: Vec<Reply>,
     /// ポストに付いた話題（外したものは含まない。仕様008）
     pub topics: Vec<TopicRef>,
+    /// 派生ポストのとき、元のタスク（仕様009）
+    pub parent: Option<ParentRef>,
 }
 
 /// 話題の名前の最大文字数（仕様008 FR-1）

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::db;
 use crate::error::AppResult;
 use crate::kind::{TaskKind, KINDS};
-use crate::models::{Task, TaskStatus};
+use crate::models::{ParentRef, Task, TaskStatus};
 
 /// 一覧に出す最大件数（FR-16）
 pub const MAX_TASK_ROWS: usize = 500;
@@ -87,6 +87,8 @@ pub struct Trend {
 pub struct TaskRow {
     pub task: Task,
     pub post_body: String,
+    /// 派生ポストのタスクなら、元のタスク（仕様009 FR-6）
+    pub parent: Option<ParentRef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -189,6 +191,7 @@ pub fn build<Tz: TimeZone>(
         .map(|(t, body, _)| TaskRow {
             task: t.clone(),
             post_body: body.clone(),
+            parent: None,
         })
         .collect();
 
@@ -267,8 +270,17 @@ pub fn get_task_dashboard(
     kind: Option<TaskKind>,
     status: Option<TaskStatus>,
 ) -> AppResult<TaskDashboard> {
-    let rows = db::all_tasks_with_post_body(conn)?;
-    Ok(build(rows, period, kind, status, chrono::Local::now()))
+    let mut rows = db::all_tasks_with_post_body(conn)?;
+    let children = db::all_children(conn)?;
+    for (t, _) in &mut rows {
+        t.children = children.get(&t.id).copied().unwrap_or_default();
+    }
+    let mut dashboard = build(rows, period, kind, status, chrono::Local::now());
+    let parents = db::all_parents(conn)?;
+    for row in &mut dashboard.tasks {
+        row.parent = parents.get(&row.task.id).cloned();
+    }
+    Ok(dashboard)
 }
 
 #[cfg(test)]
@@ -310,6 +322,7 @@ mod tests {
                 },
                 created_at: created,
                 completed_at: completed,
+                children: Default::default(),
             },
             format!("ポスト{id}"),
         )
@@ -496,5 +509,38 @@ mod tests {
         let d = get_task_dashboard(&conn, Period::All, None, None).unwrap();
         assert_eq!(d.totals.open, 1);
         assert_eq!(d.tasks[0].post_body, "READMEを書く");
+    }
+
+    #[test]
+    fn rows_show_parent_and_children() {
+        let mut conn = db::open_in_memory().unwrap();
+        let classified = |title: &str| crate::models::ClassifiedTask {
+            kind: TaskKind::Issue,
+            title: title.into(),
+            target: String::new(),
+            action: title.into(),
+        };
+        let post = db::insert_post(&conn, "READMEを書く").unwrap();
+        db::replace_tasks(&mut conn, post.id, &[classified("READMEを書く")]).unwrap();
+        let parent = db::get_post_with_tasks(&conn, post.id).unwrap().tasks[0].id;
+        let child_post = db::insert_derived_post(&conn, "ライセンス", Some(parent)).unwrap();
+        db::replace_tasks(
+            &mut conn,
+            child_post.id,
+            &[classified("ライセンスを調べる")],
+        )
+        .unwrap();
+
+        let d = get_task_dashboard(&conn, Period::All, None, None).unwrap();
+        let row = |title: &str| d.tasks.iter().find(|r| r.task.title == title).unwrap();
+        assert_eq!(row("READMEを書く").task.children.total, 1);
+        assert_eq!(row("READMEを書く").parent, None);
+        assert_eq!(
+            row("ライセンスを調べる")
+                .parent
+                .as_ref()
+                .map(|p| p.title.as_str()),
+            Some("READMEを書く")
+        );
     }
 }

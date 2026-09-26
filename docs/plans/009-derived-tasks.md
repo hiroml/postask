@@ -15,15 +15,15 @@ branch: feat/009-derived-tasks
 
 ## タスク
 
-- [ ] **T1: DB（版5）とデータの型**（FR-2, FR-5〜FR-8 / AC-6）
+- [x] **T1: DB（版5）とデータの型**（FR-2, FR-5〜FR-8 / AC-6）
   - マイグレーション版5: `posts.parent_task_id`
   - `models.rs`: `PostWithTasks.parent`（元のタスクの id とタイトル）、`Task.children`（total・done）、課題ページの `TaskRow` にも
   - `db.rs`: 親つきのポストの保存、子の数え方、元のタスクが消えたとき
   - 単体テスト
-- [ ] **T2: AI の候補**（FR-1b / AC-8）
+- [x] **T2: AI の候補**（FR-1b / AC-8）
   - `LlmProvider::suggest_derived_tasks`、Mock、`derive.rs`（新規: 候補の親をそのポストのタスクに限る、280文字に切る）
   - Claude の実装（構造化出力、リプライと同じモデル、検索なし）、実 API の確認用テスト
-- [ ] **T3: コマンド**
+- [x] **T3: コマンド**
   - `create_post(body, parent_task_id)`、`suggest_derived_tasks(post_id)`
 - [ ] **T4: 画面**（FR-1, FR-1b, FR-3〜FR-8）
   - タスクチップの「↳」と、ポストの下の入力欄（Esc で閉じる）
@@ -37,3 +37,4 @@ branch: feat/009-derived-tasks
 | 日付 | タスク | メモ |
 | --- | --- | --- |
 | 2026-09-26 | 計画作成 | |
+| 2026-09-26 | T1〜T3 | DB 版5・子の数え方・候補の作成・コマンド。単体テスト 104件、実 API で AC-7 の候補を確認（4件、親はすべて元のタスク）。`set_task_status` と分類の完了時に元のポストも `post-updated` で送る |

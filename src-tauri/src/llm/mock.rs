@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 
 use super::{AiReply, LlmError, LlmProvider};
-use crate::models::{Classification, ClassifiedTask, Task, TopicBrief};
+use crate::models::{Classification, ClassifiedTask, DerivedSuggestion, Task, TopicBrief};
 
 /// テスト用。決まった結果を返すか、決まったエラーで失敗する。
 #[derive(Default)]
@@ -13,6 +13,7 @@ pub struct MockProvider {
     reply: Option<AiReply>,
     topic_name: Option<String>,
     matched_post_ids: Option<Vec<i64>>,
+    derived: Option<Vec<DerivedSuggestion>>,
     /// `reply` が呼ばれたときの `use_web_search` の記録
     pub web_search_calls: Mutex<Vec<bool>>,
     /// `classify` に渡された話題の id の記録
@@ -56,6 +57,12 @@ impl MockProvider {
     /// 振り分け直しでこのポストの id を返す
     pub fn with_matches(mut self, ids: Vec<i64>) -> Self {
         self.matched_post_ids = Some(ids);
+        self
+    }
+
+    /// 関連タスクの候補でこれを返す
+    pub fn with_derived(mut self, suggestions: Vec<DerivedSuggestion>) -> Self {
+        self.derived = Some(suggestions);
         self
     }
 }
@@ -102,5 +109,14 @@ impl LlmProvider for MockProvider {
     ) -> Result<AiReply, LlmError> {
         self.web_search_calls.lock().unwrap().push(use_web_search);
         self.reply.clone().ok_or(LlmError::MissingApiKey)
+    }
+
+    async fn suggest_derived_tasks(
+        &self,
+        _post_body: &str,
+        _tasks: &[Task],
+        _reply_body: &str,
+    ) -> Result<Vec<DerivedSuggestion>, LlmError> {
+        self.derived.clone().ok_or(LlmError::MissingApiKey)
     }
 }

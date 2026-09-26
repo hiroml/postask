@@ -13,7 +13,7 @@ flowchart LR
 | UI | `src/app.rs`（ルーター）, `src/pages/`, `src/components/`, `src/store.rs` | 画面描画・入力。Tauri コマンドを `invoke` で呼ぶ。タイムラインの状態は `store.rs` でアプリ全体に共有（ページを移動しても残る） |
 | コマンド | `src-tauri/src/lib.rs` | `#[tauri::command]` でフロントに API を公開 |
 | 永続化 | `src-tauri/src/db.rs` | rusqlite で SQLite を読み書き。ファイルは `%APPDATA%\com.hikou.x-clone\x-clone.sqlite`（Q-012） |
-| AI | `src-tauri/src/llm/`, `classify.rs`, `reply.rs` | `LlmProvider` トレイトの裏で Claude API を呼ぶ（ADR-002）。分類と AI リプライ |
+| AI | `src-tauri/src/llm/`, `classify.rs`, `reply.rs`, `topics.rs`, `derive.rs` | `LlmProvider` トレイトの裏で Claude API を呼ぶ（ADR-002）。分類・AI リプライ・話題・関連タスクの候補 |
 | backend | `backend/` | 未使用（将来のサーバー用途を想定） |
 
 ## ビルドの流れ
@@ -27,7 +27,7 @@ flowchart LR
 
 | テーブル | 主な列 | 説明 |
 | --- | --- | --- |
-| `posts` | `id`, `body`, `created_at`, `classify_status`（pending / done / failed）, `classify_error`, `kind`（post / topic） | ユーザーのポスト。`kind = topic` は話題として投稿したもの（タスクに分類しない） |
+| `posts` | `id`, `body`, `created_at`, `classify_status`（pending / done / failed）, `classify_error`, `kind`（post / topic）, `parent_task_id`（→ tasks, SET NULL） | ユーザーのポスト。`kind = topic` は話題として投稿したもの（タスクに分類しない）。`parent_task_id` があれば派生ポスト（仕様009）で、そのタスクが元のタスクの子になる |
 | `tasks` | `id`, `post_id`（→ posts, CASCADE）, `kind`, `title`, `target`, `action`, `status`（open / done）, `created_at`, `completed_at` | ポストから AI が起こしたタスク |
 | `replies` | `id`, `post_id`（→ posts, CASCADE）, `author`（`ai`）, `body`, `sources`（出典の JSON 配列）, `model`, `status`（pending / done / failed）, `error`, `created_at` | ポストへのリプライ。AI のリプライはポストごとに1件 |
 | `topics` | `id`, `name`（一意、20文字まで）, `description`, `source_post_id`（話題として投稿したポスト）, `created_at` | 話題（仕様008） |
@@ -41,6 +41,7 @@ flowchart LR
   | 2 | `tasks.completed_at` | 002 |
   | 3 | `replies` | 003 |
   | 4 | `topics`、`post_topics`、`posts.kind` | 008 |
+  | 5 | `posts.parent_task_id` | 009 |
 
 - 種別（`kind`）の定義（表示名・色・分類の基準・リプライでの答え方）は `src-tauri/src/kind.rs` の `KINDS` にまとめてある。増やすときはここだけ直す。
 - 起動時に `pending` のまま残っているポスト・リプライ（前回の終了で中断されたもの）は `failed` にする。
@@ -60,7 +61,7 @@ flowchart LR
 
 | コマンド名 | 引数 | 戻り値 | 仕様書 |
 | --- | --- | --- | --- |
-| `create_post` | `body: String` | `Post`（保存して即返す。分類は裏で開始） | [001](../specs/001-post-and-classify.md) |
+| `create_post` | `body: String`, `parent_task_id: Option<i64>` | `Post`（保存して即返す。分類は裏で開始）。`parent_task_id` を渡すと派生ポスト（無いタスクはエラー） | [001](../specs/001-post-and-classify.md), [009](../specs/009-derived-tasks.md) |
 | `list_timeline` | `limit: u32`, `before_id: Option<i64>` | `Vec<PostWithTasks>`（新しい順。タスクとリプライを含む） | [001](../specs/001-post-and-classify.md) |
 | `retry_classification` | `post_id: i64` | `()` | [001](../specs/001-post-and-classify.md) |
 | `list_kinds` | なし | `Vec<KindInfo>`（種別・表示名・色） | [001](../specs/001-post-and-classify.md)（実装時に追加） |
@@ -72,6 +73,7 @@ flowchart LR
 | `create_topic` | `name`, `description`, `body: Option<String>` | `{ topic, post: Option<PostWithTasks> }`。`body` があれば話題として投稿（ポストも保存）。直近100件の振り分け直しを裏で行い `post-updated` で知らせる | [008](../specs/008-topics.md) |
 | `list_topics` / `update_topic` / `delete_topic` | なし / `topic_id, name, description` / `topic_id` | 話題の一覧（ポスト数・未完了のタスク数つき）・編集・削除（ポストとタスクは残る） | [008](../specs/008-topics.md) |
 | `remove_post_topic` | `post_id`, `topic_id` | `PostWithTasks`（外した話題は AI が付け直さない） | [008](../specs/008-topics.md) |
+| `suggest_derived_tasks` | `post_id` | `Vec<{ text, task_id }>`（AI リプライをもとにした関連タスクの候補、最大5件。投稿は `create_post` を候補ごとに呼ぶ） | [009](../specs/009-derived-tasks.md) |
 
 プラグインのコマンド: `plugin:opener|open_url`（出典の URL を既定のブラウザで開く）
 
@@ -79,7 +81,7 @@ flowchart LR
 
 | イベント名 | payload | いつ |
 | --- | --- | --- |
-| `post-updated` | `PostWithTasks` | 分類・AI リプライが終わったとき（成功・失敗とも）。仕様003 で `post-classified` から改名 |
+| `post-updated` | `PostWithTasks` | 分類・AI リプライが終わったとき（成功・失敗とも）。仕様003 で `post-classified` から改名。派生ポストの分類・タスクの完了切り替えでは、元のタスクのポストも送る（子の数が変わるため、仕様009） |
 
 ## DB ファイル（仕様004）
 
