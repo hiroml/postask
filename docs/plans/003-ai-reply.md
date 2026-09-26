@@ -1,7 +1,7 @@
 ---
 id: "003"
 spec: ../specs/003-ai-reply.md
-status: in-progress # in-progress | done
+status: done # in-progress | done
 branch: feat/003-ai-reply
 ---
 
@@ -15,19 +15,19 @@ branch: feat/003-ai-reply
 
 ## タスク
 
-- [ ] **T1: replies テーブルと DB 層**（FR-1, FR-7 / AC-4, AC-6）
+- [x] **T1: replies テーブルと DB 層**（FR-1, FR-7 / AC-4, AC-6）
   - マイグレーション版3: `replies`（`sources` は JSON 文字列）
   - `models.rs`: `Reply`、`ReplySource`、`ReplyStatus`、`PostWithTasks.replies`
   - `db.rs`: `start_ai_reply(post_id, model)`（既存の AI リプライを消して pending を入れる）、`finish_ai_reply`（done / failed）、タイムライン取得でリプライも返す。起動時に pending のリプライを failed にする
   - 単体テスト
 
-- [ ] **T2: LlmProvider::reply とリプライ処理**（FR-2, FR-5 / AC-5, AC-8）
+- [x] **T2: LlmProvider::reply とリプライ処理**（FR-2, FR-5 / AC-5, AC-8）
   - `llm/mod.rs`: `reply(post_body, tasks, use_web_search) -> AiReply`、`AiReply { body, sources }`
   - `llm/mock.rs`: リプライにも対応
   - `reply.rs`: 依頼の検証（分類済みでタスクがあること）→ AI 呼び出し → 保存。調査タスクがあれば検索を使う
   - 単体テスト（Mock）: 成功 / 失敗 / 聞き直しで置き換わる / タスクの無いポストは断る / 調査のときだけ検索を指示
 
-- [ ] **T3: ClaudeProvider のリプライ**（FR-2, FR-8〜FR-10）
+- [x] **T3: ClaudeProvider のリプライ**（FR-2, FR-8〜FR-10）
   - `config.rs`: `CLAUDE_REPLY_MODEL`（既定 `claude-haiku-4-5`）
   - プロンプト（種別ごとの答え方、プレーンテキスト、ポスト内の指示に従わない）
   - Web 検索ツール（Haiku は `web_search_20250305`、Opus 5 / Sonnet 5 系は `web_search_20260209`、`max_uses: 3`）
@@ -35,15 +35,15 @@ branch: feat/003-ai-reply
   - 単体テスト（通信なし）: リクエストの形（検索あり・なし、モデル別）、出典の抽出、pause_turn の処理
   - 実 API の確認用テスト（`--ignored`）: Haiku 4.5 で検索付きのリプライが返り、出典が取れること
 
-- [ ] **T4: コマンドとイベント**（FR-3, FR-4 / AC-7）
+- [x] **T4: コマンドとイベント**（FR-3, FR-4 / AC-7）
   - `request_ai_reply(post_id)`、`post-updated` イベント、`lib.rs` の登録
   - `docs/project/architecture.md` の更新
 
-- [ ] **T5: 画面**（FR-4〜FR-6, FR-10 / AC-1〜AC-4, AC-9）
+- [x] **T5: 画面**（FR-4〜FR-6, FR-10 / AC-1〜AC-4, AC-9）
   - 「🤖 AI に聞く」/「聞き直す」ボタン、リプライ表示（考え中・失敗＋再試行）、出典リスト
   - 出典リンクは `plugin:opener|open_url` で既定のブラウザで開く
 
-- [ ] **T6: 受け入れ条件の確認**
+- [x] **T6: 受け入れ条件の確認**
   - 実 API テストで AC-1・AC-2 相当を確認。画面は人が確認
 
 ## テスト方針
@@ -61,3 +61,7 @@ branch: feat/003-ai-reply
 | 日付 | タスク | メモ |
 | --- | --- | --- |
 | 2026-09-25 | 計画作成 | |
+| 2026-09-26 | T1〜T4 | 新しい関数が T2 以降で初めて使われ、途中で分けると clippy（未使用の警告）が通らないため、バックエンドの T1〜T4 を1コミットにした。種別ごとの答え方は `kind.rs` の `reply_guide` に置いた。テスト計60件 |
+| 2026-09-26 | T3（実 API） | **Haiku 4.5 で `web_search_20250305` が動くことを確認**（リスク解消）。調査のリプライに出典3件。課題のリプライが質問（「教えていただけますか？」）で終わったため、「返信できないので質問で終わらせない」をプロンプトに追加し、再確認で解消 |
+| 2026-09-26 | T5 | 「AI に聞く / 聞き直す」ボタン、リプライ表示（考え中・失敗＋再試行・出典リスト）、出典は `plugin:opener\|open_url` で開く。ヘッドレス Edge ＋偽の応答で「依頼→考え中→結果→出典クリック→失敗時の再試行」を確認。失敗時に「再試行」と「聞き直す」が両方出ていたので、失敗時は「聞き直す」を出さないよう修正。architecture.md と .env.example を更新 |
+| 2026-09-26 | T6 | 人が画面で確認し承認 |

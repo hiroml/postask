@@ -4,11 +4,13 @@ use serde::de::IgnoredAny;
 use serde::Serialize;
 
 use crate::components::{Composer, PostCard};
-use crate::models::{ClassifyStatus, KindInfo, Post, PostWithTasks};
+use crate::models::{
+    ClassifyStatus, KindInfo, Post, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus, AI_AUTHOR,
+};
 use crate::tauri::{invoke, listen, NoArgs};
 
-/// バックエンドの commands::POST_CLASSIFIED_EVENT と同じ名前
-const POST_CLASSIFIED_EVENT: &str = "post-classified";
+/// バックエンドの commands::POST_UPDATED_EVENT と同じ名前（分類・AI リプライの完了で届く）
+const POST_UPDATED_EVENT: &str = "post-updated";
 const PAGE_SIZE: u32 = 50;
 
 #[derive(Serialize)]
@@ -18,8 +20,15 @@ struct ListTimelineArgs {
 }
 
 #[derive(Serialize)]
-struct RetryArgs {
+/// post_id だけを渡すコマンド用（retry_classification, request_ai_reply）
+struct PostIdArgs {
     post_id: i64,
+}
+
+#[derive(Serialize)]
+struct SetTaskStatusArgs {
+    task_id: i64,
+    status: TaskStatus,
 }
 
 #[component]
@@ -63,7 +72,7 @@ pub fn App() -> impl IntoView {
             Ok(k) => kinds.set(k),
             Err(e) => load_error.set(Some(e)),
         }
-        if let Err(e) = listen::<PostWithTasks>(POST_CLASSIFIED_EVENT, upsert).await {
+        if let Err(e) = listen::<PostWithTasks>(POST_UPDATED_EVENT, upsert).await {
             load_error.set(Some(format!("分類結果の受信を開始できませんでした: {e}")));
         }
         load_page(None);
@@ -78,6 +87,7 @@ pub fn App() -> impl IntoView {
                     PostWithTasks {
                         post,
                         tasks: Vec::new(),
+                        replies: Vec::new(),
                     },
                 );
             }
@@ -97,9 +107,75 @@ pub fn App() -> impl IntoView {
         set_status(post_id, ClassifyStatus::Pending, None);
         spawn_local(async move {
             if let Err(e) =
-                invoke::<_, IgnoredAny>("retry_classification", &RetryArgs { post_id }).await
+                invoke::<_, IgnoredAny>("retry_classification", &PostIdArgs { post_id }).await
             {
                 set_status(post_id, ClassifyStatus::Failed, Some(e));
+            }
+        });
+    });
+
+    // タスクの状態を書き換え、書き換える前のタスクを返す
+    let replace_task = move |task_id: i64, f: &dyn Fn(&mut Task)| -> Option<Task> {
+        let mut previous = None;
+        posts.update(|list| {
+            if let Some(t) = list
+                .iter_mut()
+                .flat_map(|p| p.tasks.iter_mut())
+                .find(|t| t.id == task_id)
+            {
+                previous = Some(t.clone());
+                f(t);
+            }
+        });
+        previous
+    };
+
+    // 完了・未完了の切り替え（仕様002）。先に表示を変え、保存に失敗したら元に戻す
+    let on_toggle_task = Callback::new(move |(task_id, status): (i64, TaskStatus)| {
+        let Some(previous) = replace_task(task_id, &|t| {
+            t.status = status;
+            if status == TaskStatus::Open {
+                t.completed_at = None;
+            }
+        }) else {
+            return;
+        };
+        spawn_local(async move {
+            let args = SetTaskStatusArgs { task_id, status };
+            match invoke::<_, PostWithTasks>("set_task_status", &args).await {
+                Ok(item) => upsert(item),
+                Err(e) => {
+                    replace_task(task_id, &|t| *t = previous.clone());
+                    load_error.set(Some(format!("タスクの状態を保存できませんでした: {e}")));
+                }
+            }
+        });
+    });
+
+    // AI のリプライを画面上で置き換える（無ければ追加）
+    let set_ai_reply = move |post_id: i64, status: ReplyStatus, error: Option<String>| {
+        posts.update(|list| {
+            if let Some(p) = list.iter_mut().find(|p| p.post.id == post_id) {
+                p.replies.retain(|r| r.author != AI_AUTHOR);
+                p.replies.push(Reply {
+                    author: AI_AUTHOR.to_string(),
+                    body: String::new(),
+                    sources: Vec::new(),
+                    status,
+                    error,
+                });
+            }
+        })
+    };
+
+    // AI にリプライを頼む（仕様003）。すぐ「考え中」を出し、結果は post-updated イベントで届く
+    let on_ask_ai = Callback::new(move |post_id: i64| {
+        set_ai_reply(post_id, ReplyStatus::Pending, None);
+        spawn_local(async move {
+            if let Err(e) =
+                invoke::<_, IgnoredAny>("request_ai_reply", &PostIdArgs { post_id }).await
+            {
+                set_ai_reply(post_id, ReplyStatus::Failed, Some(e));
             }
         });
     });
@@ -123,7 +199,17 @@ pub fn App() -> impl IntoView {
                     posts
                         .get()
                         .into_iter()
-                        .map(|item| view! { <PostCard item=item kinds=kinds on_retry=on_retry /> })
+                        .map(|item| {
+                            view! {
+                                <PostCard
+                                    item=item
+                                    kinds=kinds
+                                    on_retry=on_retry
+                                    on_toggle_task=on_toggle_task
+                                    on_ask_ai=on_ask_ai
+                                />
+                            }
+                        })
                         .collect_view()
                 }}
 

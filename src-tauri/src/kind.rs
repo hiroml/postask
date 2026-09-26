@@ -26,6 +26,9 @@ pub struct KindInfo {
     pub description: &'static str,
     /// false の種別はタスクとして保存しない
     pub creates_task: bool,
+    /// AI リプライでの答え方（仕様003）。タスクにしない種別では使わない
+    #[serde(skip)]
+    pub reply_guide: &'static str,
 }
 
 pub const KINDS: &[KindInfo] = &[
@@ -35,6 +38,7 @@ pub const KINDS: &[KindInfo] = &[
         color: "#dc2626",
         description: "やるべきこと・直すべきこと・作るもの。「〇〇を直す」「〇〇を書く」「〇〇を設定する」など、行動すれば完了するもの。",
         creates_task: true,
+        reply_guide: "解決の方針と、最初にやること（3〜5ステップ）を示す。",
     },
     KindInfo {
         kind: TaskKind::Idea,
@@ -42,6 +46,7 @@ pub const KINDS: &[KindInfo] = &[
         color: "#ca8a04",
         description: "アイデア・提案・「〇〇したら面白いかも」のような、まだやると決まっていない思い付き。",
         creates_task: true,
+        reply_guide: "実現のアイデアと、小さく試す方法を示す。",
     },
     KindInfo {
         kind: TaskKind::Research,
@@ -49,6 +54,7 @@ pub const KINDS: &[KindInfo] = &[
         color: "#2563eb",
         description: "調べたいこと・比較したいこと・知りたいこと。「〇〇を調べる」「〇〇の違いを知りたい」など。",
         creates_task: true,
+        reply_guide: "調べ方（検索キーワード、見るべき情報源、比較の観点）と、分かっている範囲の概要を示す。Web 検索の結果があれば要点をまとめる。",
     },
     KindInfo {
         kind: TaskKind::Note,
@@ -56,6 +62,7 @@ pub const KINDS: &[KindInfo] = &[
         color: "#64748b",
         description: "感想・つぶやき・記録など、行動につながらないもの。タスクにはしない。",
         creates_task: false,
+        reply_guide: "",
     },
 ];
 

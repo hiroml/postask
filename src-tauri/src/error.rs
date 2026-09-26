@@ -11,6 +11,9 @@ pub enum AppError {
     #[error("ポストが見つかりません (id={0})")]
     PostNotFound(i64),
 
+    #[error("タスクが見つかりません (id={0})")]
+    TaskNotFound(i64),
+
     #[error("{0}")]
     Other(String),
 }
