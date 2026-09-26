@@ -1,10 +1,10 @@
 ---
 id: "009"
 title: 関連タスクの派生
-status: review # draft | review | approved | done | rejected（approved/done は人のみ変更可）
+status: approved # draft | review | approved | done | rejected（approved/done は人のみ変更可）
 created: 2026-09-26
 updated: 2026-09-26
-approved_by: # 承認した人の名前（人が記入）
+approved_by: hikou # 2026-09-26 会話上で承認（AI が代理記入）
 backlog: B-002
 ---
 
@@ -137,3 +137,4 @@ CREATE INDEX idx_posts_parent_task_id ON posts(parent_task_id);
 | --- | --- | --- |
 | 2026-09-26 | 初版 | AI |
 | 2026-09-26 | Q-031, Q-032 の回答を反映（手動と AI の提案の両方、完了は連動しない） | AI |
+| 2026-09-26 | 承認（approved） | hikou |

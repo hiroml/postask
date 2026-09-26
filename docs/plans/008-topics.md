@@ -1,0 +1,50 @@
+---
+id: "008"
+spec: ../specs/008-topics.md
+status: in-progress # in-progress | done
+branch: feat/008-topics
+---
+
+# 008: 話題 — 実装計画
+
+## 方針
+
+- `feat/007-kind-colors` から枝分かれして作る（チップの見た目をそろえるため）。
+- 振り分けは、今の分類（1回の AI 呼び出し）の出力に `topic_ids` を足して行う。別の呼び出しを増やさない。
+- 話題として投稿したポスト（`posts.kind = 'topic'`）は、タスクへの分類をしない。
+- 話題を作ったときの振り分け直し（直近100件）は、裏で1回だけ AI を呼ぶ。
+
+## タスク
+
+- [ ] **T1: DB（版4）とデータの型**（FR-1, FR-5, FR-9〜FR-11）
+  - マイグレーション版4: `topics`、`post_topics`、`posts.kind`
+  - `models.rs`: `Topic`（一覧用に件数つき）、`TopicRef`、`PostWithTasks.topics`、`Post.kind`
+  - `db.rs`: 話題の作成・一覧（ポスト数・未完了のタスク数）・編集・削除、ポストへの話題の付け外し（外したものは AI が付け直さない）、分類に渡す話題の一覧（最近使われた順に最大50件）
+  - 単体テスト
+- [ ] **T2: AI（分類の拡張・名前の提案・振り分け直し）と処理**（FR-2, FR-4, FR-6, FR-7 / AC-8）
+  - `LlmProvider::classify` に話題の一覧を渡し、`topic_ids` も受け取る。`suggest_topic_name`、`match_posts_to_topic` を足す
+  - `MockProvider` を対応させる
+  - `classify.rs`: 話題の判定（存在しない・外された id を捨てる、話題が無いときは判定しない）。`topics.rs`（新規）: 話題の作成と振り分け直し
+  - 単体テスト（Mock）
+- [ ] **T3: Claude の実装**
+  - 分類のプロンプトとスキーマ（`topic_ids`）、名前の提案、振り分け直し（いずれも構造化出力）
+  - 単体テスト（通信なし）と、実 API の確認用テスト（`--ignored`）
+- [ ] **T4: コマンド**
+  - `suggest_topic_name`、`create_topic`、`list_topics`、`update_topic`、`delete_topic`、`remove_post_topic`。振り分け直しの結果は `post-updated` で知らせる
+  - `architecture.md` の更新
+- [ ] **T5: 画面**（FR-2, FR-3, FR-8〜FR-11）
+  - 入力欄の「ポスト / # 話題として投稿」の切り替えと、話題の作成ダイアログ（AI の名前の提案）
+  - ポストの話題のチップ（× で外す）、話題として投稿したポストの印
+  - 話題ページ（一覧・作る・編集・削除）。メニューの「話題」を有効に
+- [ ] **T6: 確認**
+  - ヘッドレス Edge ＋偽の応答で画面を確認。実 API の確認用テストで AC-1〜AC-3 相当を確認。画面は人が確認
+
+## リスク・懸念
+
+- 分類のスキーマ変更は、今の分類（仕様001）の精度に影響しうる。実 API で仕様001の受け入れ例（AC-1〜AC-5）も再確認する。
+
+## 作業ログ
+
+| 日付 | タスク | メモ |
+| --- | --- | --- |
+| 2026-09-26 | 計画作成 | |

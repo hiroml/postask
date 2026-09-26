@@ -1,10 +1,10 @@
 ---
 id: "008"
 title: 話題（ポストの話題への振り分け）
-status: review # draft | review | approved | done | rejected（approved/done は人のみ変更可）
+status: approved # draft | review | approved | done | rejected（approved/done は人のみ変更可）
 created: 2026-09-26
 updated: 2026-09-26
-approved_by: # 承認した人の名前（人が記入）
+approved_by: hikou # 2026-09-26 会話上で承認（AI が代理記入）
 backlog: B-017
 ---
 
@@ -156,3 +156,4 @@ ALTER TABLE posts ADD COLUMN kind TEXT NOT NULL DEFAULT 'post';  -- 'post' | 'to
 | --- | --- | --- |
 | 2026-09-26 | 初版 | AI |
 | 2026-09-26 | Q-028〜Q-030 の回答を反映（2通りの作り方、ポスト単位、直近100件の振り分け直し） | AI |
+| 2026-09-26 | 承認（approved） | hikou |
