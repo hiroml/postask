@@ -28,6 +28,14 @@ const MAX_TIMELINE_LIMIT: u32 = 200;
 pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
     pub llm: Arc<dyn LlmProvider>,
+    pub info: AppInfo,
+}
+
+/// アプリの情報（仕様004）。開発版かどうかを画面に出すために使う
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AppInfo {
+    pub dev: bool,
+    pub db_path: String,
 }
 
 fn create_post_in_db(conn: &Mutex<Connection>, body: &str) -> AppResult<Post> {
@@ -112,6 +120,12 @@ pub fn request_ai_reply(app: AppHandle, state: State<'_, AppState>, post_id: i64
 #[tauri::command]
 pub fn list_kinds() -> Vec<KindInfo> {
     KINDS.to_vec()
+}
+
+/// 開発版かどうかと、使っている DB のパスを返す（仕様004）。
+#[tauri::command]
+pub fn app_info(state: State<'_, AppState>) -> AppInfo {
+    state.info.clone()
 }
 
 #[cfg(test)]

@@ -370,3 +370,20 @@ button {
     border-right: none;
   }
 }
+
+/* 開発版の印（仕様004） */
+.feed-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dev-badge {
+  padding: 2px 10px;
+  border: 1px solid #f59e0b;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 700;
+}

@@ -1,6 +1,6 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row};
 
 use crate::error::{AppError, AppResult};
 use crate::models::{
@@ -9,6 +9,53 @@ use crate::models::{
 };
 
 pub const DB_FILE_NAME: &str = "x-clone.sqlite";
+/// 開発用ビルドで使う DB（仕様004）
+pub const DEV_DB_FILE_NAME: &str = "x-clone-dev.sqlite";
+
+/// 使う DB ファイルと、開発版かどうか（仕様004）
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DbLocation {
+    pub path: PathBuf,
+    pub dev: bool,
+    /// 環境変数 `X_CLONE_DB` で指定されたファイルか
+    pub overridden: bool,
+}
+
+/// 使う DB ファイルを決める。優先順位: `X_CLONE_DB` > 開発用ビルドなら `x-clone-dev.sqlite` > `x-clone.sqlite`
+pub fn resolve_db_location(
+    env_override: Option<&str>,
+    is_debug: bool,
+    data_dir: &Path,
+) -> DbLocation {
+    if let Some(path) = env_override.map(str::trim).filter(|p| !p.is_empty()) {
+        return DbLocation {
+            path: PathBuf::from(path),
+            dev: is_debug,
+            overridden: true,
+        };
+    }
+    let name = if is_debug {
+        DEV_DB_FILE_NAME
+    } else {
+        DB_FILE_NAME
+    };
+    DbLocation {
+        path: data_dir.join(name),
+        dev: is_debug,
+        overridden: false,
+    }
+}
+
+/// 開発用 DB が無く、普段使いの DB があるときだけ、普段使いの DB をコピーする（Q-023）。コピーしたら true。
+/// 普段使いの DB は読み取り専用で開き、`VACUUM INTO` で一貫したコピーを作る（コピー元は変更しない）。
+pub fn prepare_dev_db(dev_path: &Path, prod_path: &Path) -> AppResult<bool> {
+    if dev_path.exists() || !prod_path.exists() {
+        return Ok(false);
+    }
+    let source = Connection::open_with_flags(prod_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    source.execute("VACUUM INTO ?1", [dev_path.to_string_lossy().as_ref()])?;
+    Ok(true)
+}
 
 /// 版1: 仕様001のスキーマ。`IF NOT EXISTS` なので、版管理を入れる前に作られた DB（版0・テーブルあり）にも安全に当てられる。
 const SCHEMA_V1: &str = r#"
@@ -545,6 +592,89 @@ mod tests {
         let timeline = list_timeline(&conn, 10, None).unwrap();
         assert_eq!(timeline[0].post.body, "古いポスト");
         assert_eq!(timeline[0].tasks[0].title, "古いタスク");
+    }
+
+    #[test]
+    fn db_location_depends_on_build_and_override() {
+        let dir = Path::new("C:/data");
+
+        let dev = resolve_db_location(None, true, dir);
+        assert_eq!(dev.path, dir.join(DEV_DB_FILE_NAME));
+        assert!(dev.dev && !dev.overridden);
+
+        let release = resolve_db_location(None, false, dir);
+        assert_eq!(release.path, dir.join(DB_FILE_NAME));
+        assert!(!release.dev);
+
+        let custom = resolve_db_location(Some(" D:/test.sqlite "), true, dir);
+        assert_eq!(custom.path, PathBuf::from("D:/test.sqlite"));
+        assert!(custom.overridden);
+
+        // 空の指定は無視する
+        assert_eq!(resolve_db_location(Some("  "), true, dir), dev);
+    }
+
+    /// テストごとの一時フォルダ（終わったら消す）
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("x-clone-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn dev_db_is_copied_once_from_prod_without_changing_it() {
+        let tmp = TempDir::new("devcopy");
+        let prod = tmp.0.join(DB_FILE_NAME);
+        let dev = tmp.0.join(DEV_DB_FILE_NAME);
+        {
+            let conn = open(&prod).unwrap();
+            insert_post(&conn, "普段使いのポスト").unwrap();
+        }
+        let prod_modified = std::fs::metadata(&prod).unwrap().modified().unwrap();
+
+        assert!(prepare_dev_db(&dev, &prod).unwrap());
+        let conn = open(&dev).unwrap();
+        assert_eq!(
+            list_timeline(&conn, 10, None).unwrap()[0].post.body,
+            "普段使いのポスト"
+        );
+
+        // 開発用 DB で書いても普段使いの DB は変わらない
+        insert_post(&conn, "開発用のポスト").unwrap();
+        drop(conn);
+        assert_eq!(
+            std::fs::metadata(&prod).unwrap().modified().unwrap(),
+            prod_modified
+        );
+        let prod_conn = open(&prod).unwrap();
+        assert_eq!(list_timeline(&prod_conn, 10, None).unwrap().len(), 1);
+        drop(prod_conn);
+
+        // 2回目はコピーしない（開発用 DB のデータが残る）
+        assert!(!prepare_dev_db(&dev, &prod).unwrap());
+        assert_eq!(
+            list_timeline(&open(&dev).unwrap(), 10, None).unwrap().len(),
+            2
+        );
+    }
+
+    #[test]
+    fn dev_db_is_not_created_when_prod_is_missing() {
+        let tmp = TempDir::new("devnoprod");
+        let dev = tmp.0.join(DEV_DB_FILE_NAME);
+        assert!(!prepare_dev_db(&dev, &tmp.0.join(DB_FILE_NAME)).unwrap());
+        assert!(!dev.exists());
     }
 
     /// 実際の DB の**コピー**を最新の版に上げ、データが残ることを確かめる（人の DB は触らない）。

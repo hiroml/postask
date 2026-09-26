@@ -5,7 +5,8 @@ use serde::Serialize;
 
 use crate::components::{Composer, PostCard};
 use crate::models::{
-    ClassifyStatus, KindInfo, Post, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus, AI_AUTHOR,
+    AppInfo, ClassifyStatus, KindInfo, Post, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus,
+    AI_AUTHOR,
 };
 use crate::tauri::{invoke, listen, NoArgs};
 
@@ -65,6 +66,14 @@ pub fn App() -> impl IntoView {
             }
         });
     };
+
+    // 開発版かどうか（仕様004）
+    let is_dev = RwSignal::new(false);
+    spawn_local(async move {
+        if let Ok(info) = invoke::<_, AppInfo>("app_info", &NoArgs {}).await {
+            is_dev.set(info.dev);
+        }
+    });
 
     // 起動時: 種別の読み込み → イベント購読 → タイムライン読み込み（購読を先にして取りこぼしを防ぐ）
     spawn_local(async move {
@@ -185,6 +194,11 @@ pub fn App() -> impl IntoView {
             <section class="feed-panel">
                 <header class="feed-header">
                     <h1>"ホーム"</h1>
+                    <Show when=move || is_dev.get()>
+                        <span class="dev-badge" title="開発用の DB（x-clone-dev.sqlite）を使っています">
+                            "開発版"
+                        </span>
+                    </Show>
                 </header>
 
                 <Composer on_posted=on_posted />

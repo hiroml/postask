@@ -95,6 +95,13 @@ pub struct KindInfo {
     pub creates_task: bool,
 }
 
+/// アプリの情報（仕様004）
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct AppInfo {
+    pub dev: bool,
+    pub db_path: String,
+}
+
 /// 前後の空白を除いた文字数（バックエンドの検証と同じ数え方）
 pub fn post_length(body: &str) -> usize {
     body.trim().chars().count()
