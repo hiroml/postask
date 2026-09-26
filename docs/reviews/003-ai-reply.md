@@ -3,7 +3,7 @@ id: "003"
 spec: ../specs/003-ai-reply.md
 plan: ../plans/003-ai-reply.md
 branch: feat/003-ai-reply
-status: pending # pending | changes-requested | approved（approved は人のみ）
+status: approved # pending | changes-requested | approved（approved は人のみ）
 requested: 2026-09-26
 ---
 
@@ -79,5 +79,5 @@ requested: 2026-09-26
 
 <!-- 人が記入 -->
 
-- 判定: <!-- approved / changes-requested -->
-- コメント:
+- 判定: approved（hikou、2026-09-26 会話上で承認。AI が代理記入）
+- コメント: 動作確認済み。仕様外の判断（確認依頼の「人に確認してほしいこと」）もあわせて承認。

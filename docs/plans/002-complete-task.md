@@ -1,7 +1,7 @@
 ---
 id: "002"
 spec: ../specs/002-complete-task.md
-status: in-progress # in-progress | done
+status: done # in-progress | done
 branch: feat/002-complete-task
 ---
 
@@ -32,7 +32,7 @@ branch: feat/002-complete-task
   - 完了は取り消し線＋薄い色、`title` 属性で「完了: MM/DD HH:MM」
   - 楽観的更新。失敗したら元に戻し、エラーを表示
 
-- [ ] **T4: 受け入れ条件の確認**（自動分は完了、画面は人の確認待ち）（AC-1〜AC-8）
+- [x] **T4: 受け入れ条件の確認**（AC-1〜AC-8）
   - 単体テストで AC-4〜AC-8 の自動部分を確認。画面の AC-1〜AC-3、AC-7 の手動部分は人が確認
 
 ## テスト方針
@@ -52,3 +52,4 @@ branch: feat/002-complete-task
 | 2026-09-25 | T1 | `PRAGMA user_version` による版管理。版1=仕様001のスキーマ、版2=`completed_at`。仕様001の形の DB が版2に上がりデータが残ることをテストで確認。テスト計39件 |
 | 2026-09-26 | T2 | `TaskStatus` 型（DB 保存用のマクロ `sql_text_enum!` を追加し `ClassifyStatus` も共通化）、`db::set_task_status`、コマンド登録。テスト計42件。※ T1 のコミット時に clippy の失敗を見落としていたため `6b1ce1c` で修正し、以降は検証が通ったときだけ commit するようにした |
 | 2026-09-26 | T3 | チップ左端のチェック（button + role=checkbox）、完了は取り消し線＋薄い色＋完了日時のツールチップ、楽観的更新と失敗時の巻き戻し。ヘッドレス Edge ＋偽の Tauri 応答で「完了→戻す→保存失敗で巻き戻し」を確認。ユーザーの開発サーバーと衝突しないよう、trunk build は一時フォルダに出力 |
+| 2026-09-26 | T4 | 人が画面で確認し承認 |

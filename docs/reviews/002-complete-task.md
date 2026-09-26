@@ -3,7 +3,7 @@ id: "002"
 spec: ../specs/002-complete-task.md
 plan: ../plans/002-complete-task.md
 branch: feat/002-complete-task（feat/003-ai-reply に含まれる）
-status: pending # pending | changes-requested | approved（approved は人のみ）
+status: approved # pending | changes-requested | approved（approved は人のみ）
 requested: 2026-09-26
 ---
 
@@ -70,5 +70,5 @@ requested: 2026-09-26
 
 <!-- 人が記入 -->
 
-- 判定: <!-- approved / changes-requested -->
-- コメント:
+- 判定: approved（hikou 記入:「完了」）
+- コメント:　異常なし

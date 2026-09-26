@@ -1,7 +1,7 @@
 ---
 id: "002"
 title: タスクを完了にする
-status: approved # draft | review | approved | done | rejected（approved/done は人のみ変更可）
+status: done # draft | review | approved | done | rejected（approved/done は人のみ変更可）
 created: 2026-09-25
 updated: 2026-09-25
 approved_by: hikou # 2026-09-25 会話上で承認（AI が代理記入）
@@ -113,3 +113,4 @@ fn set_task_status(task_id: i64, status: TaskStatus) -> Result<PostWithTasks, St
 | 2026-09-25 | 初版 | AI |
 | 2026-09-25 | Q-014 の回答を反映（完了日時の記録、マイグレーションの仕組み、AC-6〜AC-8） | AI |
 | 2026-09-25 | 承認（approved） | hikou |
+| 2026-09-26 | 実装完了・確認済み（done） | hikou |
