@@ -1,7 +1,7 @@
 ---
 id: "009"
 spec: ../specs/009-derived-tasks.md
-status: done # in-progress | done
+status: in-progress # in-progress | done
 branch: feat/009-derived-tasks
 ---
 
@@ -29,7 +29,7 @@ branch: feat/009-derived-tasks
   - タスクチップの「↳」と、ポストの下の入力欄（Esc で閉じる）
   - 派生ポストの「↳ 〇〇 から」、チップの「↳ 1/3」「✓ 関連タスク完了」、課題ページの一覧の親子表示
   - AI リプライの下の「↳ ここから関連タスクを作る」と候補の選択・編集・投稿
-- [x] **T5: 確認**
+- [ ] **T5: 確認**（自動分は完了、画面は人の確認待ち）
   - ヘッドレス Edge ＋偽の応答、実 API の確認用テスト。画面は人が確認
 
 ## 作業ログ
