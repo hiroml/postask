@@ -45,6 +45,8 @@ pub struct TimelineStore {
     /// 入力中の下書き（ページを移動しても残す）
     pub draft: RwSignal<String>,
     pub load_more: Callback<()>,
+    /// 取得・更新した `PostWithTasks` を画面の状態に反映する（無ければ追加）。課題ページの完了チェック用
+    pub upsert: Callback<PostWithTasks>,
     pub on_posted: Callback<Post>,
     pub on_retry: Callback<i64>,
     /// (タスク ID, 切り替え後の状態)
@@ -222,6 +224,7 @@ impl TimelineStore {
             is_dev,
             draft,
             load_more,
+            upsert: Callback::new(upsert),
             on_posted,
             on_retry,
             on_toggle_task,

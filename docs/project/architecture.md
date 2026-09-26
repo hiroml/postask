@@ -10,7 +10,7 @@ flowchart LR
 
 | レイヤ | 場所 | 責務 |
 | --- | --- | --- |
-| UI | `src/app.rs` ほか | 画面描画・入力。Tauri コマンドを `invoke` で呼ぶ |
+| UI | `src/app.rs`（ルーター）, `src/pages/`, `src/components/`, `src/store.rs` | 画面描画・入力。Tauri コマンドを `invoke` で呼ぶ。タイムラインの状態は `store.rs` でアプリ全体に共有（ページを移動しても残る） |
 | コマンド | `src-tauri/src/lib.rs` | `#[tauri::command]` でフロントに API を公開 |
 | 永続化 | `src-tauri/src/db.rs` | rusqlite で SQLite を読み書き。ファイルは `%APPDATA%\com.hikou.x-clone\x-clone.sqlite`（Q-012） |
 | AI | `src-tauri/src/llm/`, `classify.rs`, `reply.rs` | `LlmProvider` トレイトの裏で Claude API を呼ぶ（ADR-002）。分類と AI リプライ |
@@ -49,6 +49,7 @@ flowchart LR
 | `ANTHROPIC_API_KEY` | なし | Claude API のキー |
 | `CLAUDE_MODEL` | `claude-haiku-4-5` | 分類に使うモデル |
 | `CLAUDE_REPLY_MODEL` | `claude-haiku-4-5` | リプライに使うモデル。調査のポストでは Web 検索（最大3回）を使う |
+| `X_CLONE_DB` | なし | 使う DB ファイルのパスを指定する（テスト・確認用、仕様004） |
 
 ## Tauri コマンド一覧
 
@@ -62,6 +63,8 @@ flowchart LR
 | `list_kinds` | なし | `Vec<KindInfo>`（種別・表示名・色） | [001](../specs/001-post-and-classify.md)（実装時に追加） |
 | `set_task_status` | `task_id: i64`, `status: "open" \| "done"` | `PostWithTasks` | [002](../specs/002-complete-task.md) |
 | `request_ai_reply` | `post_id: i64` | `()`（受け付けてすぐ返す。生成は裏で行う） | [003](../specs/003-ai-reply.md) |
+| `get_task_dashboard` | `period`（`all` / `7d` / `30d` / `90d`）, `kind: Option<種別>`, `status: Option<open / done>` | `TaskDashboard`（数字・種別ごとの数・推移・一覧。日付はパソコンのタイムゾーンで数える） | [006](../specs/006-tasks-page.md) |
+| `app_info` | なし | `{ dev: bool, db_path: String }`（開発版かどうか） | [004](../specs/004-dev-db.md) |
 
 プラグインのコマンド: `plugin:opener|open_url`（出典の URL を既定のブラウザで開く）
 
@@ -70,3 +73,21 @@ flowchart LR
 | イベント名 | payload | いつ |
 | --- | --- | --- |
 | `post-updated` | `PostWithTasks` | 分類・AI リプライが終わったとき（成功・失敗とも）。仕様003 で `post-classified` から改名 |
+
+## DB ファイル（仕様004）
+
+| ビルド | ファイル | 備考 |
+| --- | --- | --- |
+| 開発用（`cargo tauri dev`） | `%APPDATA%\com.hikou.x-clone\x-clone-dev.sqlite` | 無ければ普段使いの DB を読み取り専用でコピーして作る。画面・タイトルに「開発版」 |
+| リリース（`cargo tauri build`） | `%APPDATA%\com.hikou.x-clone\x-clone.sqlite` | 普段使い |
+
+## ページ（仕様005）
+
+| パス | ページ | 中身 |
+| --- | --- | --- |
+| `/` | ホーム | 入力欄とタイムライン（`pages/home.rs`） |
+| `/tasks` | 課題 | 集計・グラフ・一覧（`pages/tasks.rs`、仕様006） |
+| `/topics`, `/notifications`, `/profile`, `/settings` | 話題・通知・プロフィール・設定 | 準備中（`pages/coming_soon.rs`） |
+
+- メニューの項目は `src/components/nav.rs` の `NAV_ITEMS`。中身ができたら `ready: true` にして `app.rs` のルートを差し替える
+- グラフは自前の SVG / HTML（`src/components/charts/`）。色は dataviz スキルの検証を通した2色（未完了・作成 `#2a78d6` / 完了 `#eb6834`）

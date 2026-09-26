@@ -573,3 +573,340 @@ button {
   font-size: 0.8rem;
   font-weight: 700;
 }
+
+/* 課題ページ（仕様006） */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.filter select {
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.tasks-content {
+  padding: 16px 20px 32px;
+  transition: opacity 0.15s ease;
+}
+
+/* 読み込み中は前の表示を薄く残す */
+.tasks-content.stale {
+  opacity: 0.5;
+}
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+}
+
+.stat-label {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.stat-value {
+  color: #0f172a;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-card {
+  margin-bottom: 24px;
+}
+
+.chart-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+
+.chart-title {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 12px;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-key-rect {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.chart-key-line {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.chart-table-toggle {
+  margin-left: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.8rem;
+  padding: 2px 10px;
+}
+
+.chart-table,
+.task-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.chart-table th,
+.chart-table td,
+.task-table th,
+.task-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #eef2f6;
+  text-align: left;
+}
+
+.chart-table th,
+.task-table th {
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* 横の積み上げ棒 */
+.bar-chart {
+  position: relative;
+  display: grid;
+  gap: 10px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.bar-row:hover {
+  background: #f8fafc;
+}
+
+.bar-row:focus-visible {
+  outline: 2px solid #1d9bf0;
+}
+
+.bar-label {
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.bar-track {
+  display: flex;
+  height: 16px;
+}
+
+.bar-seg {
+  height: 100%;
+}
+
+/* 棒の端（データの端）だけ角を丸める */
+.bar-seg.end {
+  border-radius: 0 4px 4px 0;
+}
+
+/* 未完了と完了の間の 2px のすき間 */
+.bar-seg.gap {
+  margin-left: 2px;
+}
+
+.bar-seg:hover {
+  filter: brightness(1.12);
+}
+
+.bar-value {
+  color: #475569;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-value strong {
+  color: #0f172a;
+}
+
+/* 折れ線 */
+.line-chart {
+  position: relative;
+}
+
+.line-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.line-svg:focus-visible {
+  outline: 2px solid #1d9bf0;
+}
+
+.chart-grid {
+  stroke: #e5e7eb;
+  stroke-width: 1;
+}
+
+.chart-axis-label {
+  fill: #64748b;
+  font-size: 11px;
+}
+
+.chart-end-label {
+  fill: #475569;
+  font-size: 11px;
+}
+
+.chart-crosshair {
+  stroke: #94a3b8;
+  stroke-width: 1;
+}
+
+.chart-marker-active {
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.chart-empty {
+  color: #94a3b8;
+  text-align: center;
+}
+
+/* ツールチップ: 値を太く、系列名は小さく */
+.chart-tooltip {
+  position: absolute;
+  z-index: 5;
+  min-width: 120px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  pointer-events: none;
+}
+
+.chart-tooltip-title {
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-tooltip-value {
+  min-width: 2ch;
+  color: #0f172a;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-tooltip-label {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+/* 課題の一覧 */
+.list-note {
+  margin: 4px 0 8px;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.task-table .col-check {
+  width: 3em;
+}
+
+.task-table .col-post {
+  color: #64748b;
+}
+
+.task-table .col-date {
+  white-space: nowrap;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-table tr.done .col-title {
+  text-decoration: line-through;
+  color: #64748b;
+}
+
+.task-chip-plain {
+  --kind-color: #64748b;
+  display: inline-flex;
+}
+
+@media (max-width: 720px) {
+  .stat-tiles {
+    grid-template-columns: 1fr;
+  }
+
+  .task-table .col-post {
+    display: none;
+  }
+}
+
+.task-table th {
+  white-space: nowrap;
+}
+
+/* 一覧の完了済みのチェックは塗りつぶす（ホームのチップと同じ見た目） */
+.task-table tr.done .task-check {
+  background: var(--kind-color);
+}

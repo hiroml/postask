@@ -27,7 +27,7 @@ pub const NAV_ITEMS: &[NavItem] = &[
         href: "/tasks",
         icon: "✅",
         label: "課題",
-        ready: false,
+        ready: true,
     },
     NavItem {
         href: "/topics",

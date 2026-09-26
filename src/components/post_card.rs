@@ -3,43 +3,11 @@ use wasm_bindgen::prelude::*;
 
 use leptos::task::spawn_local;
 
+use crate::datetime::format_time;
 use crate::models::{
     ClassifyStatus, KindInfo, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus,
 };
 use crate::tauri::invoke;
-
-#[wasm_bindgen]
-extern "C" {
-    type Date;
-
-    #[wasm_bindgen(constructor)]
-    fn new(value: &str) -> Date;
-    #[wasm_bindgen(method, js_name = getTime)]
-    fn get_time(this: &Date) -> f64;
-    #[wasm_bindgen(method, js_name = getMonth)]
-    fn get_month(this: &Date) -> f64;
-    #[wasm_bindgen(method, js_name = getDate)]
-    fn get_date(this: &Date) -> f64;
-    #[wasm_bindgen(method, js_name = getHours)]
-    fn get_hours(this: &Date) -> f64;
-    #[wasm_bindgen(method, js_name = getMinutes)]
-    fn get_minutes(this: &Date) -> f64;
-}
-
-/// RFC 3339（UTC）をローカル時刻の「MM/DD HH:MM」にする。
-fn format_time(rfc3339: &str) -> String {
-    let d = Date::new(rfc3339);
-    if d.get_time().is_nan() {
-        return rfc3339.to_string();
-    }
-    format!(
-        "{:02}/{:02} {:02}:{:02}",
-        d.get_month() as u32 + 1,
-        d.get_date() as u32,
-        d.get_hours() as u32,
-        d.get_minutes() as u32
-    )
-}
 
 /// 1件のポストと、その分類状態・タスク（FR-5, FR-6）。
 #[component]
