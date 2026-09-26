@@ -1117,3 +1117,148 @@ button {
   display: grid;
   gap: 8px;
 }
+
+/* ---- 関連タスクの派生（仕様009） ---- */
+
+/* チップの「↳」ボタン */
+.task-derive {
+  width: 20px;
+  height: 20px;
+  margin-right: -6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.task-derive:hover,
+.task-derive:focus-visible {
+  background: color-mix(in srgb, var(--kind-color) 22%, white);
+  color: #0f172a;
+}
+
+/* 子の数・完了数 */
+.task-chip-children {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.task-chip-children.all-done {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.task-table .col-title .task-chip-children {
+  margin-left: 6px;
+}
+
+/* 派生ポストの「↳ 〇〇 から」・課題ページの元のタスク */
+.derived-from,
+.task-parent {
+  margin: 0 0 2px;
+  color: #475569;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.task-parent {
+  display: block;
+}
+
+/* ポストの下の入力欄・AI の候補の欄 */
+.derive-composer,
+.derive-suggestions {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.derive-composer-title,
+.derive-suggestions-title {
+  margin: 0 0 6px;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.derive-composer textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  background: #ffffff;
+}
+
+.derive-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.derive-actions .char-count {
+  margin-right: auto;
+}
+
+.derive-suggest-button {
+  margin-top: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.85rem;
+  padding: 4px 14px;
+}
+
+.derive-suggest-button:hover {
+  background: #f1f5f9;
+}
+
+.derive-suggestions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.derive-candidate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 4px 0;
+}
+
+.derive-candidate-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.9rem;
+  background: #ffffff;
+}
+
+.derive-candidate:not(.checked) .derive-candidate-text {
+  color: #475569;
+}
+
+.derive-candidate-parent {
+  color: #64748b;
+  font-size: 0.8rem;
+}

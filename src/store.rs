@@ -7,8 +7,8 @@ use serde::de::IgnoredAny;
 use serde::Serialize;
 
 use crate::models::{
-    AppInfo, ClassifyStatus, CreatedTopic, KindInfo, Post, PostWithTasks, Reply, ReplyStatus, Task,
-    TaskStatus, AI_AUTHOR,
+    post_length, AppInfo, ClassifyStatus, CreatedTopic, DerivedSuggestion, KindInfo, ParentRef,
+    Post, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus, AI_AUTHOR, MAX_POST_CHARS,
 };
 use crate::tauri::{invoke, listen, NoArgs};
 
@@ -32,6 +32,57 @@ struct PostIdArgs {
 struct RemoveTopicArgs {
     post_id: i64,
     topic_id: i64,
+}
+
+#[derive(Serialize)]
+struct CreateDerivedPostArgs {
+    body: String,
+    parent_task_id: i64,
+}
+
+/// タスクから派生ポストを書く入力欄（仕様009 FR-1）。開けるのは一度に1つ
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeriveDraft {
+    pub post_id: i64,
+    pub task_id: i64,
+    pub task_title: String,
+    pub text: String,
+    pub sending: bool,
+    pub error: Option<String>,
+}
+
+/// AI の関連タスクの候補の状態（仕様009 FR-1b）
+#[derive(Debug, Clone, PartialEq)]
+pub enum SuggestState {
+    Loading,
+    Failed(String),
+    Ready,
+}
+
+/// 候補1件。文は投稿前に直せる。既定はチェックなし
+#[derive(Debug, Clone, PartialEq)]
+pub struct Candidate {
+    pub text: String,
+    pub task_id: i64,
+    pub checked: bool,
+}
+
+/// AI リプライの下の候補の欄。開けるのは一度に1つ
+#[derive(Debug, Clone, PartialEq)]
+pub struct SuggestPanel {
+    pub post_id: i64,
+    pub state: SuggestState,
+    pub candidates: Vec<Candidate>,
+    pub posting: bool,
+    pub error: Option<String>,
+}
+
+impl Candidate {
+    /// 投稿できる文か（空でなく、280文字以内）
+    pub fn is_valid(&self) -> bool {
+        let n = post_length(&self.text);
+        n > 0 && n <= MAX_POST_CHARS
+    }
 }
 
 #[derive(Serialize)]
@@ -62,6 +113,17 @@ pub struct TimelineStore {
     pub on_topic_created: Callback<CreatedTopic>,
     /// (ポスト ID, 話題 ID): ポストから話題を外す（仕様008 FR-9）
     pub on_remove_topic: Callback<(i64, i64)>,
+    /// 派生ポストの入力欄（仕様009）
+    pub derive_draft: RwSignal<Option<DeriveDraft>>,
+    /// (ポスト ID, タスク ID, タスクのタイトル): 派生ポストの入力欄を開く
+    pub on_open_derive: Callback<(i64, i64, String)>,
+    pub on_submit_derive: Callback<()>,
+    /// AI の関連タスクの候補の欄（仕様009 FR-1b）
+    pub suggest_panel: RwSignal<Option<SuggestPanel>>,
+    /// ポスト ID: 候補を作る（再試行も同じ）
+    pub on_suggest: Callback<i64>,
+    /// チェックした候補を派生ポストとして投稿する
+    pub on_post_suggestions: Callback<()>,
 }
 
 impl TimelineStore {
@@ -124,10 +186,20 @@ impl TimelineStore {
             load_page(posts.with_untracked(|p| p.last().map(|x| x.post.id)))
         });
 
-        // 投稿直後は「分類中」で先頭に出す。分類完了イベントが先に届いていた場合は上書きしない
+        // 投稿直後は「分類中」で先頭に出す。分類完了イベントが先に届いていた場合は上書きしない。
+        // 派生ポストなら、元のタスクのタイトルを画面にあるポストから探して「↳ 〇〇 から」を出す（仕様009）
         let on_posted = Callback::new(move |post: Post| {
             posts.update(|list| {
                 if !list.iter().any(|p| p.post.id == post.id) {
+                    let parent = post.parent_task_id.and_then(|task_id| {
+                        list.iter()
+                            .flat_map(|p| p.tasks.iter())
+                            .find(|t| t.id == task_id)
+                            .map(|t| ParentRef {
+                                task_id,
+                                title: t.title.clone(),
+                            })
+                    });
                     list.insert(
                         0,
                         PostWithTasks {
@@ -135,6 +207,7 @@ impl TimelineStore {
                             tasks: Vec::new(),
                             replies: Vec::new(),
                             topics: Vec::new(),
+                            parent,
                         },
                     );
                 }
@@ -245,6 +318,154 @@ impl TimelineStore {
             });
         });
 
+        // ---- 派生ポスト（仕様009） ----
+        let derive_draft = RwSignal::new(None::<DeriveDraft>);
+        let suggest_panel = RwSignal::new(None::<SuggestPanel>);
+
+        let on_open_derive =
+            Callback::new(move |(post_id, task_id, task_title): (i64, i64, String)| {
+                derive_draft.set(Some(DeriveDraft {
+                    post_id,
+                    task_id,
+                    task_title,
+                    text: String::new(),
+                    sending: false,
+                    error: None,
+                }))
+            });
+
+        let on_submit_derive = Callback::new(move |_: ()| {
+            let Some(draft) = derive_draft.get_untracked() else {
+                return;
+            };
+            let n = post_length(&draft.text);
+            if draft.sending || n == 0 || n > MAX_POST_CHARS {
+                return;
+            }
+            derive_draft.update(|d| {
+                if let Some(d) = d {
+                    d.sending = true;
+                    d.error = None;
+                }
+            });
+            spawn_local(async move {
+                let args = CreateDerivedPostArgs {
+                    body: draft.text.clone(),
+                    parent_task_id: draft.task_id,
+                };
+                match invoke::<_, Post>("create_post", &args).await {
+                    Ok(post) => {
+                        on_posted.run(post);
+                        derive_draft.set(None);
+                    }
+                    Err(e) => derive_draft.update(|d| {
+                        if let Some(d) = d.as_mut().filter(|d| d.task_id == draft.task_id) {
+                            d.sending = false;
+                            d.error = Some(e);
+                        }
+                    }),
+                }
+            });
+        });
+
+        let on_suggest = Callback::new(move |post_id: i64| {
+            suggest_panel.set(Some(SuggestPanel {
+                post_id,
+                state: SuggestState::Loading,
+                candidates: Vec::new(),
+                posting: false,
+                error: None,
+            }));
+            spawn_local(async move {
+                let result = invoke::<_, Vec<DerivedSuggestion>>(
+                    "suggest_derived_tasks",
+                    &PostIdArgs { post_id },
+                )
+                .await;
+                suggest_panel.update(|panel| {
+                    // 待っている間に閉じた・別のポストで開き直した場合は捨てる
+                    let Some(p) = panel
+                        .as_mut()
+                        .filter(|p| p.post_id == post_id && p.state == SuggestState::Loading)
+                    else {
+                        return;
+                    };
+                    match result {
+                        Ok(list) => {
+                            p.state = SuggestState::Ready;
+                            p.candidates = list
+                                .into_iter()
+                                .map(|s| Candidate {
+                                    text: s.text,
+                                    task_id: s.task_id,
+                                    checked: false,
+                                })
+                                .collect();
+                        }
+                        Err(e) => p.state = SuggestState::Failed(e),
+                    }
+                });
+            });
+        });
+
+        // チェックした候補を1件ずつ投稿する。失敗したものだけを残してエラーを出す
+        let on_post_suggestions = Callback::new(move |_: ()| {
+            let Some(panel) = suggest_panel.get_untracked() else {
+                return;
+            };
+            let chosen: Vec<Candidate> = panel
+                .candidates
+                .iter()
+                .filter(|c| c.checked && c.is_valid())
+                .cloned()
+                .collect();
+            if panel.posting || chosen.is_empty() {
+                return;
+            }
+            suggest_panel.update(|p| {
+                if let Some(p) = p {
+                    p.posting = true;
+                    p.error = None;
+                }
+            });
+            spawn_local(async move {
+                let mut failed = Vec::new();
+                let mut last_error = None;
+                for c in chosen {
+                    let args = CreateDerivedPostArgs {
+                        body: c.text.clone(),
+                        parent_task_id: c.task_id,
+                    };
+                    match invoke::<_, Post>("create_post", &args).await {
+                        Ok(post) => on_posted.run(post),
+                        Err(e) => {
+                            last_error = Some(e);
+                            failed.push(c);
+                        }
+                    }
+                }
+                let post_id = panel.post_id;
+                if failed.is_empty() {
+                    suggest_panel.update(|p| {
+                        if p.as_ref().is_some_and(|p| p.post_id == post_id) {
+                            *p = None;
+                        }
+                    });
+                    return;
+                }
+                suggest_panel.update(|p| {
+                    if let Some(p) = p.as_mut().filter(|p| p.post_id == post_id) {
+                        p.posting = false;
+                        p.error = Some(format!(
+                            "{}件を投稿できませんでした: {}",
+                            failed.len(),
+                            last_error.unwrap_or_default()
+                        ));
+                        p.candidates = failed;
+                    }
+                });
+            });
+        });
         Self {
             posts,
             kinds,
@@ -260,6 +481,12 @@ impl TimelineStore {
             on_ask_ai,
             on_topic_created,
             on_remove_topic,
+            derive_draft,
+            on_open_derive,
+            on_submit_derive,
+            suggest_panel,
+            on_suggest,
+            on_post_suggestions,
         }
     }
 }

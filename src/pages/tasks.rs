@@ -4,7 +4,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use serde::Serialize;
 
-use crate::components::{BarRow, LineChart, StackedBarChart};
+use crate::components::{children_badge, BarRow, LineChart, StackedBarChart};
 use crate::datetime::format_date;
 use crate::models::{KindInfo, PostWithTasks, TaskDashboard, TaskRow, TaskStatus};
 use crate::store::{use_timeline_store, SetTaskStatusArgs};
@@ -284,7 +284,13 @@ fn TaskListRow(
             <td>
                 <span class="task-chip-kind" style=format!("--kind-color: {color}")>{label}</span>
             </td>
-            <td class="col-title">{t.title}</td>
+            <td class="col-title">
+                {row.parent.map(|p| view! { <span class="task-parent" title="元のタスク">{format!("↳ {}", p.title)}</span> })}
+                <span>{t.title}</span>
+                {children_badge(t.children).map(|(text, all_done, title)| view! {
+                    <span class="task-chip-children" class:all-done=all_done title=title>{text}</span>
+                })}
+            </td>
             <td class="col-post" title=row.post_body.clone()>{excerpt(&row.post_body)}</td>
             <td class="col-date">{format_date(&t.created_at)}</td>
             <td class="col-date">{t.completed_at.as_deref().map(format_date).unwrap_or_default()}</td>
