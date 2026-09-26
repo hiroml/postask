@@ -17,7 +17,7 @@ pub fn HomePage() -> impl IntoView {
                 <h1>"ホーム"</h1>
             </header>
 
-            <Composer draft=store.draft on_posted=store.on_posted />
+            <Composer draft=store.draft on_posted=store.on_posted on_topic_created=store.on_topic_created />
 
             <div class="divider"></div>
 
@@ -37,6 +37,7 @@ pub fn HomePage() -> impl IntoView {
                                 on_retry=store.on_retry
                                 on_toggle_task=store.on_toggle_task
                                 on_ask_ai=store.on_ask_ai
+                                on_remove_topic=store.on_remove_topic
                             />
                         }
                     })

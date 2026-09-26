@@ -5,7 +5,7 @@ use leptos::task::spawn_local;
 
 use crate::datetime::format_time;
 use crate::models::{
-    ClassifyStatus, KindInfo, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus,
+    ClassifyStatus, KindInfo, PostKind, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus,
 };
 use crate::tauri::invoke;
 
@@ -19,9 +19,17 @@ pub fn PostCard(
     on_toggle_task: Callback<(i64, TaskStatus)>,
     /// AI にリプライを頼む（聞き直し・再試行も同じ）。引数はポスト ID
     on_ask_ai: Callback<i64>,
+    /// (ポスト ID, 話題 ID): ポストから話題を外す（仕様008 FR-9）
+    on_remove_topic: Callback<(i64, i64)>,
 ) -> impl IntoView {
     let ai_reply = item.ai_reply().cloned();
-    let PostWithTasks { post, tasks, .. } = item;
+    let PostWithTasks {
+        post,
+        tasks,
+        topics,
+        ..
+    } = item;
+    let is_topic_post = post.kind == PostKind::Topic;
     let post_id = post.id;
 
     // 分類済みでタスクがあるポストだけ AI に聞ける（仕様003 FR-4）。
@@ -76,8 +84,30 @@ pub fn PostCard(
     view! {
         <article class="post-card">
             <div class="post-meta">{format_time(&post.created_at)}</div>
+            {is_topic_post.then(|| view! { <div class="topic-post-badge">"# 話題を作成"</div> })}
             <p class="post-body">{post.body}</p>
             {status_view}
+            {(!topics.is_empty()).then(|| view! {
+                <div class="topic-chips">
+                    {topics.into_iter().map(|t| {
+                        let topic_id = t.id;
+                        view! {
+                            <span class="topic-chip">
+                                {format!("# {}", t.name)}
+                                <button
+                                    type="button"
+                                    class="topic-chip-remove"
+                                    aria-label=format!("「{}」を外す", t.name)
+                                    title="この話題を外す"
+                                    on:click=move |_| on_remove_topic.run((post_id, topic_id))
+                                >
+                                    "×"
+                                </button>
+                            </span>
+                        }
+                    }).collect_view()}
+                </div>
+            })}
             {ai_reply.map(|reply| view! { <AiReplyView reply=reply post_id=post_id on_ask_ai=on_ask_ai /> })}
             {ask_button.map(|b| view! { <div class="ask-ai">{b}</div> })}
         </article>

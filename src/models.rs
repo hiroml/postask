@@ -20,6 +20,16 @@ pub struct Post {
     pub created_at: String,
     pub classify_status: ClassifyStatus,
     pub classify_error: Option<String>,
+    pub kind: PostKind,
+}
+
+/// ポストの種類（仕様008）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PostKind {
+    Post,
+    /// 話題として投稿したもの
+    Topic,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,7 +90,35 @@ pub struct PostWithTasks {
     pub post: Post,
     pub tasks: Vec<Task>,
     pub replies: Vec<Reply>,
+    pub topics: Vec<TopicRef>,
 }
+
+/// ポストに付いた話題（仕様008）
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct TopicRef {
+    pub id: i64,
+    pub name: String,
+}
+
+/// 話題（一覧用、仕様008）
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Topic {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub post_count: u32,
+    pub open_task_count: u32,
+}
+
+/// 話題を作った結果（入力欄から作ったときは話題のポストも付く）
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct CreatedTopic {
+    pub topic: Topic,
+    pub post: Option<PostWithTasks>,
+}
+
+/// 話題の名前の最大文字数（バックエンドと同じ）
+pub const MAX_TOPIC_NAME_CHARS: usize = 20;
 
 impl PostWithTasks {
     pub fn ai_reply(&self) -> Option<&Reply> {

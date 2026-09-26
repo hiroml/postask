@@ -7,8 +7,8 @@ use serde::de::IgnoredAny;
 use serde::Serialize;
 
 use crate::models::{
-    AppInfo, ClassifyStatus, KindInfo, Post, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus,
-    AI_AUTHOR,
+    AppInfo, ClassifyStatus, CreatedTopic, KindInfo, Post, PostWithTasks, Reply, ReplyStatus, Task,
+    TaskStatus, AI_AUTHOR,
 };
 use crate::tauri::{invoke, listen, NoArgs};
 
@@ -26,6 +26,12 @@ struct ListTimelineArgs {
 #[derive(Serialize)]
 struct PostIdArgs {
     post_id: i64,
+}
+
+#[derive(Serialize)]
+struct RemoveTopicArgs {
+    post_id: i64,
+    topic_id: i64,
 }
 
 #[derive(Serialize)]
@@ -52,6 +58,10 @@ pub struct TimelineStore {
     /// (タスク ID, 切り替え後の状態)
     pub on_toggle_task: Callback<(i64, TaskStatus)>,
     pub on_ask_ai: Callback<i64>,
+    /// 話題を作ったとき（入力欄から作ったときは話題のポストを先頭に出す。仕様008）
+    pub on_topic_created: Callback<CreatedTopic>,
+    /// (ポスト ID, 話題 ID): ポストから話題を外す（仕様008 FR-9）
+    pub on_remove_topic: Callback<(i64, i64)>,
 }
 
 impl TimelineStore {
@@ -124,6 +134,7 @@ impl TimelineStore {
                             post,
                             tasks: Vec::new(),
                             replies: Vec::new(),
+                            topics: Vec::new(),
                         },
                     );
                 }
@@ -216,6 +227,24 @@ impl TimelineStore {
             });
         });
 
+        // 話題を作ったとき: 話題のポストがあれば先頭に出す（振り分け直しの結果は post-updated で届く）
+        let on_topic_created = Callback::new(move |created: CreatedTopic| {
+            if let Some(item) = created.post {
+                upsert(item);
+            }
+        });
+
+        // ポストから話題を外す（仕様008 FR-9）
+        let on_remove_topic = Callback::new(move |(post_id, topic_id): (i64, i64)| {
+            spawn_local(async move {
+                let args = RemoveTopicArgs { post_id, topic_id };
+                match invoke::<_, PostWithTasks>("remove_post_topic", &args).await {
+                    Ok(item) => upsert(item),
+                    Err(e) => load_error.set(Some(format!("話題を外せませんでした: {e}"))),
+                }
+            });
+        });
+
         Self {
             posts,
             kinds,
@@ -229,6 +258,8 @@ impl TimelineStore {
             on_retry,
             on_toggle_task,
             on_ask_ai,
+            on_topic_created,
+            on_remove_topic,
         }
     }
 }

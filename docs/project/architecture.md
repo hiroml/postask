@@ -27,9 +27,11 @@ flowchart LR
 
 | テーブル | 主な列 | 説明 |
 | --- | --- | --- |
-| `posts` | `id`, `body`, `created_at`, `classify_status`（pending / done / failed）, `classify_error` | ユーザーのポスト |
+| `posts` | `id`, `body`, `created_at`, `classify_status`（pending / done / failed）, `classify_error`, `kind`（post / topic） | ユーザーのポスト。`kind = topic` は話題として投稿したもの（タスクに分類しない） |
 | `tasks` | `id`, `post_id`（→ posts, CASCADE）, `kind`, `title`, `target`, `action`, `status`（open / done）, `created_at`, `completed_at` | ポストから AI が起こしたタスク |
 | `replies` | `id`, `post_id`（→ posts, CASCADE）, `author`（`ai`）, `body`, `sources`（出典の JSON 配列）, `model`, `status`（pending / done / failed）, `error`, `created_at` | ポストへのリプライ。AI のリプライはポストごとに1件 |
+| `topics` | `id`, `name`（一意、20文字まで）, `description`, `source_post_id`（話題として投稿したポスト）, `created_at` | 話題（仕様008） |
+| `post_topics` | `post_id`, `topic_id`, `assigned_by`（`ai` / `user`）, `removed`（人が外した）, `created_at` | ポストと話題の対応。1ポストに最大3つ（AI）。`removed = 1` の話題は AI が付け直さない |
 
 - **DB の版管理（マイグレーション）**: `PRAGMA user_version` に版数を記録し、起動時に足りない版だけを当てる。テーブルや列を増やすときは `MIGRATIONS` の末尾に版を足す（既存の版は変えない）。
 
@@ -38,6 +40,7 @@ flowchart LR
   | 1 | posts / tasks | 001 |
   | 2 | `tasks.completed_at` | 002 |
   | 3 | `replies` | 003 |
+  | 4 | `topics`、`post_topics`、`posts.kind` | 008 |
 
 - 種別（`kind`）の定義（表示名・色・分類の基準・リプライでの答え方）は `src-tauri/src/kind.rs` の `KINDS` にまとめてある。増やすときはここだけ直す。
 - 起動時に `pending` のまま残っているポスト・リプライ（前回の終了で中断されたもの）は `failed` にする。
@@ -65,6 +68,10 @@ flowchart LR
 | `request_ai_reply` | `post_id: i64` | `()`（受け付けてすぐ返す。生成は裏で行う） | [003](../specs/003-ai-reply.md) |
 | `get_task_dashboard` | `period`（`all` / `7d` / `30d` / `90d`）, `kind: Option<種別>`, `status: Option<open / done>` | `TaskDashboard`（数字・種別ごとの数・推移・一覧。日付はパソコンのタイムゾーンで数える） | [006](../specs/006-tasks-page.md) |
 | `app_info` | なし | `{ dev: bool, db_path: String }`（開発版かどうか） | [004](../specs/004-dev-db.md) |
+| `suggest_topic_name` | `body: String` | `String`（AI が提案した話題の名前） | [008](../specs/008-topics.md) |
+| `create_topic` | `name`, `description`, `body: Option<String>` | `{ topic, post: Option<PostWithTasks> }`。`body` があれば話題として投稿（ポストも保存）。直近100件の振り分け直しを裏で行い `post-updated` で知らせる | [008](../specs/008-topics.md) |
+| `list_topics` / `update_topic` / `delete_topic` | なし / `topic_id, name, description` / `topic_id` | 話題の一覧（ポスト数・未完了のタスク数つき）・編集・削除（ポストとタスクは残る） | [008](../specs/008-topics.md) |
+| `remove_post_topic` | `post_id`, `topic_id` | `PostWithTasks`（外した話題は AI が付け直さない） | [008](../specs/008-topics.md) |
 
 プラグインのコマンド: `plugin:opener|open_url`（出典の URL を既定のブラウザで開く）
 
@@ -87,7 +94,8 @@ flowchart LR
 | --- | --- | --- |
 | `/` | ホーム | 入力欄とタイムライン（`pages/home.rs`） |
 | `/tasks` | 課題 | 集計・グラフ・一覧（`pages/tasks.rs`、仕様006） |
-| `/topics`, `/notifications`, `/profile`, `/settings` | 話題・通知・プロフィール・設定 | 準備中（`pages/coming_soon.rs`） |
+| `/topics` | 話題 | 話題の一覧・作成・編集・削除（`pages/topics.rs`、仕様008） |
+| `/notifications`, `/profile`, `/settings` | 通知・プロフィール・設定 | 準備中（`pages/coming_soon.rs`） |
 
 - メニューの項目は `src/components/nav.rs` の `NAV_ITEMS`。中身ができたら `ready: true` にして `app.rs` のルートを差し替える
 - グラフは自前の SVG / HTML（`src/components/charts/`）。色は dataviz スキルの検証を通した2色（未完了・作成 `#2a78d6` / 完了 `#eb6834`）

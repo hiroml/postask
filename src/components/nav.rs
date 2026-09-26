@@ -33,7 +33,7 @@ pub const NAV_ITEMS: &[NavItem] = &[
         href: "/topics",
         icon: "#",
         label: "話題",
-        ready: false,
+        ready: true,
     },
     NavItem {
         href: "/notifications",

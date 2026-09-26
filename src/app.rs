@@ -6,7 +6,7 @@ use leptos_router::path;
 use leptos_router::NavigateOptions;
 
 use crate::components::Nav;
-use crate::pages::{ComingSoonPage, HomePage, TasksPage};
+use crate::pages::{ComingSoonPage, HomePage, TasksPage, TopicsPage};
 use crate::store::provide_timeline_store;
 
 /// 知らないパスのときにホームへ移動する。
@@ -40,19 +40,7 @@ pub fn App() -> impl IntoView {
                     <Routes fallback=|| view! { <GoHome /> }>
                         <Route path=path!("/") view=HomePage />
                         <Route path=path!("/tasks") view=TasksPage />
-                        <Route
-                            path=path!("/topics")
-                            view=|| view! {
-                                <ComingSoonPage
-                                    title="話題"
-                                    plans=&[
-                                        "話題の作成と、ポストの話題への振り分け（B-017）",
-                                        "話題ごとの課題数と具体的なポストの表示（B-018）",
-                                        "話題のランキングと検索（B-027）",
-                                    ]
-                                />
-                            }
-                        />
+                        <Route path=path!("/topics") view=TopicsPage />
                         <Route
                             path=path!("/notifications")
                             view=|| view! {
