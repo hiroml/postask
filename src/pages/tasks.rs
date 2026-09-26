@@ -282,7 +282,7 @@ fn TaskListRow(
                 </span>
             </td>
             <td>
-                <span class="task-chip-kind" style=format!("background: {color}")>{label}</span>
+                <span class="task-chip-kind" style=format!("--kind-color: {color}")>{label}</span>
             </td>
             <td class="col-title">{t.title}</td>
             <td class="col-post" title=row.post_body.clone()>{excerpt(&row.post_body)}</td>

@@ -35,7 +35,7 @@ pub const KINDS: &[KindInfo] = &[
     KindInfo {
         kind: TaskKind::Issue,
         label: "課題",
-        color: "#dc2626",
+        color: "#4a3aa7",
         description: "やるべきこと・直すべきこと・作るもの。「〇〇を直す」「〇〇を書く」「〇〇を設定する」など、行動すれば完了するもの。",
         creates_task: true,
         reply_guide: "解決の方針と、最初にやること（3〜5ステップ）を示す。",
@@ -43,7 +43,7 @@ pub const KINDS: &[KindInfo] = &[
     KindInfo {
         kind: TaskKind::Idea,
         label: "思い付き",
-        color: "#ca8a04",
+        color: "#eda100",
         description: "アイデア・提案・「〇〇したら面白いかも」のような、まだやると決まっていない思い付き。",
         creates_task: true,
         reply_guide: "実現のアイデアと、小さく試す方法を示す。",
@@ -51,7 +51,7 @@ pub const KINDS: &[KindInfo] = &[
     KindInfo {
         kind: TaskKind::Research,
         label: "調査",
-        color: "#2563eb",
+        color: "#1baf7a",
         description: "調べたいこと・比較したいこと・知りたいこと。「〇〇を調べる」「〇〇の違いを知りたい」など。",
         creates_task: true,
         reply_guide: "調べ方（検索キーワード、見るべき情報源、比較の観点）と、分かっている範囲の概要を示す。Web 検索の結果があれば要点をまとめる。",

@@ -394,14 +394,24 @@ button {
   font-size: 0.88rem;
 }
 
+/* 種別の表示: 色の点＋濃い文字（仕様007。色が見分けにくくても文字で分かる） */
 .task-chip-kind {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--kind-color);
-  color: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #0f172a;
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.task-chip-kind::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--kind-color);
+  flex-shrink: 0;
 }
 
 .task-chip-title {
@@ -420,7 +430,7 @@ button {
   border: 2px solid var(--kind-color);
   border-radius: 50%;
   background: white;
-  color: white;
+  color: #0f172a;
   font-size: 0.7rem;
   font-weight: 700;
   line-height: 1;
@@ -439,8 +449,9 @@ button {
   opacity: 0.6;
 }
 
+/* 完了: 薄い塗り＋濃い ✓（黄・緑青の上の白い ✓ は読みにくいため、仕様007） */
 .task-chip.done .task-check {
-  background: var(--kind-color);
+  background: color-mix(in srgb, var(--kind-color) 35%, white);
 }
 
 .task-chip.done .task-chip-title {
@@ -908,5 +919,5 @@ button {
 
 /* 一覧の完了済みのチェックは塗りつぶす（ホームのチップと同じ見た目） */
 .task-table tr.done .task-check {
-  background: var(--kind-color);
+  background: color-mix(in srgb, var(--kind-color) 35%, white);
 }
