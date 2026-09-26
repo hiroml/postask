@@ -6,9 +6,10 @@ use rusqlite::Connection;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::classify::{self, lock};
+use crate::dashboard::{self, Period, TaskDashboard};
 use crate::db;
 use crate::error::{AppError, AppResult};
-use crate::kind::{KindInfo, KINDS};
+use crate::kind::{KindInfo, TaskKind, KINDS};
 use crate::llm::LlmProvider;
 use crate::models::{validate_post_body, ClassifyStatus, Post, PostWithTasks, TaskStatus};
 use crate::reply;
@@ -28,6 +29,14 @@ const MAX_TIMELINE_LIMIT: u32 = 200;
 pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
     pub llm: Arc<dyn LlmProvider>,
+    pub info: AppInfo,
+}
+
+/// アプリの情報（仕様004）。開発版かどうかを画面に出すために使う
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AppInfo {
+    pub dev: bool,
+    pub db_path: String,
 }
 
 fn create_post_in_db(conn: &Mutex<Connection>, body: &str) -> AppResult<Post> {
@@ -108,10 +117,28 @@ pub fn request_ai_reply(app: AppHandle, state: State<'_, AppState>, post_id: i64
     Ok(())
 }
 
+/// 課題ページの集計（仕様006）。期間・種別・状態で絞り込む（None = すべて）。
+#[tauri::command(rename_all = "snake_case")]
+pub fn get_task_dashboard(
+    state: State<'_, AppState>,
+    period: Period,
+    kind: Option<TaskKind>,
+    status: Option<TaskStatus>,
+) -> AppResult<TaskDashboard> {
+    let c = lock(&state.db)?;
+    dashboard::get_task_dashboard(&c, period, kind, status)
+}
+
 /// 種別の表示名と色（kind.rs の定義）を返す。
 #[tauri::command]
 pub fn list_kinds() -> Vec<KindInfo> {
     KINDS.to_vec()
+}
+
+/// 開発版かどうかと、使っている DB のパスを返す（仕様004）。
+#[tauri::command]
+pub fn app_info(state: State<'_, AppState>) -> AppInfo {
+    state.info.clone()
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 ---
 id: "005"
 title: ナビゲーター（ページ構成とメニュー）
-status: approved # draft | review | approved | done | rejected（approved/done は人のみ変更可）
+status: done # draft | review | approved | done | rejected（approved/done は人のみ変更可）
 created: 2026-09-26
 updated: 2026-09-26
 approved_by: hikou # 2026-09-26 会話上で承認（AI が代理記入）
@@ -117,3 +117,4 @@ proposal: ../proposals/B-025-navigation.md
 | 2026-09-26 | 初版（素案をもとに作成） | AI |
 | 2026-09-26 | Q-018〜Q-022, Q-024 の回答を反映（素案どおりで確定、準備中ページの表示、leptos_router 承認） | AI |
 | 2026-09-26 | 承認（approved） | hikou |
+| 2026-09-26 | 実装完了・確認済み（done） | hikou |

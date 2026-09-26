@@ -13,8 +13,11 @@ struct CreatePostArgs {
 
 /// ポストの入力欄（FR-1）。280文字を超えるか空のときは投稿できない。
 #[component]
-pub fn Composer(on_posted: Callback<Post>) -> impl IntoView {
-    let draft = RwSignal::new(String::new());
+pub fn Composer(
+    /// 入力中の下書き。ページを移動しても残るよう外（store）で持つ（仕様005 FR-6）
+    draft: RwSignal<String>,
+    on_posted: Callback<Post>,
+) -> impl IntoView {
     let submitting = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
 

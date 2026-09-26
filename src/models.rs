@@ -44,6 +44,7 @@ pub struct Task {
     pub kind: String,
     pub title: String,
     pub status: TaskStatus,
+    pub created_at: String,
     pub completed_at: Option<String>,
 }
 
@@ -93,6 +94,63 @@ pub struct KindInfo {
     pub label: String,
     pub color: String,
     pub creates_task: bool,
+}
+
+/// 課題ページの集計（仕様006。バックエンドの dashboard.rs と同じ形）
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct TaskDashboard {
+    pub totals: Totals,
+    pub by_kind: Vec<KindCount>,
+    pub trend: Trend,
+    pub tasks: Vec<TaskRow>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Totals {
+    pub open: u32,
+    pub done: u32,
+    pub completion_rate: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct KindCount {
+    pub kind: String,
+    pub open: u32,
+    pub done: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Bucket {
+    Day,
+    Week,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Trend {
+    pub bucket: Bucket,
+    pub points: Vec<TrendPoint>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct TrendPoint {
+    pub start: String,
+    pub created: u32,
+    pub completed: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct TaskRow {
+    pub task: Task,
+    pub post_body: String,
+}
+
+/// アプリの情報（仕様004）
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct AppInfo {
+    pub dev: bool,
+    pub db_path: String,
 }
 
 /// 前後の空白を除いた文字数（バックエンドの検証と同じ数え方）
