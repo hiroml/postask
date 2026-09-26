@@ -1,7 +1,7 @@
 ---
 id: "006"
 title: 課題ページ（集計・グラフ・一覧）
-status: draft # draft | review | approved | done | rejected（approved/done は人のみ変更可）
+status: review # draft | review | approved | done | rejected（approved/done は人のみ変更可）
 created: 2026-09-26
 updated: 2026-09-26
 approved_by: # 承認した人の名前（人が記入）
@@ -28,7 +28,6 @@ depends_on: "005"
 
 ## 要件
 
-グラフの内容は Q-026、描き方は Q-025 の回答で確定させる。以下は AI の推奨案どおりの場合。
 
 ### 絞り込み（ページ上部の1行）
 
@@ -168,7 +167,7 @@ struct TaskDashboard {
 ### フロントエンド
 
 - `src/pages/tasks.rs`（仕様005で作る枠に中身を入れる）
-- `src/components/charts/`（新規）: 棒グラフ・折れ線・ツールチップ・表表示。Q-025 で「自前の SVG」を選んだ場合は Leptos で SVG を直接描く
+- `src/components/charts/`（新規）: 棒グラフ・折れ線・ツールチップ・表表示。グラフ用のクレートは使わず、Leptos で SVG を直接描く（Q-025）
 
 ## スコープ外
 
@@ -186,11 +185,12 @@ struct TaskDashboard {
 
 詳細と回答欄は [判断待ちボード](../questions.md) にある。
 
-- [ ] [Q-025](../questions.md) グラフの描き方
-- [ ] [Q-026](../questions.md) 課題ページに出す内容
+- [x] Q-025 グラフの描き方 → 自前で SVG を描く
+- [x] Q-026 課題ページに出す内容 → 推奨案のとおり
 
 ## 変更履歴
 
 | 日付 | 内容 | 担当 |
 | --- | --- | --- |
 | 2026-09-26 | 初版 | AI |
+| 2026-09-26 | Q-025, Q-026 の回答を反映（自前の SVG、推奨案どおりの内容） | AI |
