@@ -3,7 +3,7 @@ id: "008"
 spec: ../specs/008-topics.md
 plan: ../plans/008-topics.md
 branch: feat/009-derived-tasks # 007〜009 を1本のブランチに積んでいる（2ea6ab8, f1c211c）
-status: pending # pending | changes-requested | approved（approved は人のみ）
+status: approved # pending | changes-requested | approved（approved は人のみ）
 requested: 2026-09-26
 ---
 
@@ -71,5 +71,5 @@ requested: 2026-09-26
 
 <!-- 人が記入 -->
 
-- 判定:
-- コメント:
+- 判定: approved（hikou 記入:「完了」、会話で「承認してマージ」）
+- コメント: 異常なし

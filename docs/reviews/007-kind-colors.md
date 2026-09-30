@@ -3,7 +3,7 @@ id: "007"
 spec: ../specs/007-kind-colors.md
 plan: ../plans/007-kind-colors.md
 branch: feat/009-derived-tasks # 007〜009 を1本のブランチに積んでいる（c9a3021）
-status: pending # pending | changes-requested | approved（approved は人のみ）
+status: approved # pending | changes-requested | approved（approved は人のみ）
 requested: 2026-09-26
 ---
 
@@ -55,5 +55,5 @@ requested: 2026-09-26
 
 <!-- 人が記入 -->
 
-- 判定:
-- コメント:
+- 判定: approved（hikou 記入:「完了」、会話で「承認してマージ」）
+- コメント: 異常なし
