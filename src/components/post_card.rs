@@ -302,7 +302,7 @@ fn TaskChip(
 }
 
 /// 子のあるタスクのチップに付ける表示（仕様009 FR-5, FR-8）: (文言, すべて完了か, ツールチップ)。
-/// 子が無ければ None。すべて完了したら「✓ 関連タスク完了」にする（親の完了とは連動しない）
+/// 子が無ければ None。すべて完了したら「✓ 3/3」のように印を変える（親の完了とは連動しない。Q-033）
 pub fn children_badge(children: ChildCount) -> Option<(String, bool, String)> {
     if children.total == 0 {
         return None;
@@ -312,7 +312,11 @@ pub fn children_badge(children: ChildCount) -> Option<(String, bool, String)> {
         children.total, children.done
     );
     Some(if children.all_done() {
-        ("✓ 関連タスク完了".to_string(), true, title)
+        (
+            format!("✓ {}/{}", children.done, children.total),
+            true,
+            title,
+        )
     } else {
         (
             format!("↳ {}/{}", children.done, children.total),
