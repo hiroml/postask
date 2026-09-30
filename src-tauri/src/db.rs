@@ -4,9 +4,10 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row};
 
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    now, ClassifiedTask, ClassifyStatus, Post, PostWithTasks, Reply, ReplySource, ReplyStatus,
-    Task, TaskStatus,
+    now, ChildCount, ClassifiedTask, ClassifyStatus, ParentRef, Post, PostKind, PostWithTasks,
+    Reply, ReplySource, ReplyStatus, Task, TaskStatus, Topic, TopicBrief, TopicRef,
 };
+use std::collections::HashMap;
 
 pub const DB_FILE_NAME: &str = "x-clone.sqlite";
 /// 開発用ビルドで使う DB（仕様004）
@@ -103,6 +104,31 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_replies_post_id ON replies(post_id);
     "#,
+    // 版4: 仕様008 話題
+    r#"
+    CREATE TABLE topics (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      name           TEXT    NOT NULL UNIQUE,
+      description    TEXT    NOT NULL DEFAULT '',
+      source_post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      created_at     TEXT    NOT NULL
+    );
+    CREATE TABLE post_topics (
+      post_id     INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      topic_id    INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+      assigned_by TEXT    NOT NULL,
+      removed     INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT    NOT NULL,
+      PRIMARY KEY (post_id, topic_id)
+    );
+    CREATE INDEX idx_post_topics_topic_id ON post_topics(topic_id);
+    ALTER TABLE posts ADD COLUMN kind TEXT NOT NULL DEFAULT 'post';
+    "#,
+    // 版5: 仕様009 派生ポストの元のタスク
+    r#"
+    ALTER TABLE posts ADD COLUMN parent_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL;
+    CREATE INDEX idx_posts_parent_task_id ON posts(parent_task_id);
+    "#,
 ];
 
 #[cfg(test)]
@@ -144,7 +170,8 @@ fn init(conn: &mut Connection) -> AppResult<()> {
     migrate(conn)
 }
 
-const POST_COLUMNS: &str = "id, body, created_at, classify_status, classify_error";
+const POST_COLUMNS: &str =
+    "id, body, created_at, classify_status, classify_error, kind, parent_task_id";
 const TASK_COLUMNS: &str =
     "id, post_id, kind, title, target, action, status, created_at, completed_at";
 
@@ -155,6 +182,8 @@ fn post_from_row(row: &Row<'_>) -> rusqlite::Result<Post> {
         created_at: row.get(2)?,
         classify_status: row.get(3)?,
         classify_error: row.get(4)?,
+        kind: row.get(5)?,
+        parent_task_id: row.get(6)?,
     })
 }
 
@@ -169,16 +198,128 @@ fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Task> {
         status: row.get(6)?,
         created_at: row.get(7)?,
         completed_at: row.get(8)?,
+        children: ChildCount::default(),
     })
 }
 
 /// 検証済みの本文でポストを保存する。分類状態は pending。
+#[cfg(test)]
 pub fn insert_post(conn: &Connection, body: &str) -> AppResult<Post> {
+    insert_derived_post(conn, body, None)
+}
+
+/// 元のタスクを指定してポストを保存する（仕様009 の派生ポスト）。
+/// `parent_task_id` が無いタスクなら `TaskNotFound`。
+pub fn insert_derived_post(
+    conn: &Connection,
+    body: &str,
+    parent_task_id: Option<i64>,
+) -> AppResult<Post> {
+    if let Some(task_id) = parent_task_id {
+        post_id_of_task(conn, task_id)?;
+    }
     conn.execute(
-        "INSERT INTO posts (body, created_at, classify_status) VALUES (?1, ?2, ?3)",
-        params![body, now(), ClassifyStatus::Pending],
+        "INSERT INTO posts (body, created_at, classify_status, parent_task_id)
+         VALUES (?1, ?2, ?3, ?4)",
+        params![body, now(), ClassifyStatus::Pending, parent_task_id],
     )?;
     get_post(conn, conn.last_insert_rowid())
+}
+
+/// タスクが付いているポストの id
+pub fn post_id_of_task(conn: &Connection, task_id: i64) -> AppResult<i64> {
+    conn.query_row("SELECT post_id FROM tasks WHERE id = ?1", [task_id], |r| {
+        r.get(0)
+    })
+    .optional()?
+    .ok_or(AppError::TaskNotFound(task_id))
+}
+
+/// 派生ポストの元のタスクが付いているポストの id（元のタスクが無ければ None）。
+/// 子の数が変わったときに、親のポストを画面で更新するために使う（仕様009）。
+pub fn parent_post_of(conn: &Connection, post_id: i64) -> AppResult<Option<i64>> {
+    Ok(conn
+        .query_row(
+            "SELECT t.post_id FROM posts p JOIN tasks t ON t.id = p.parent_task_id WHERE p.id = ?1",
+            [post_id],
+            |r| r.get(0),
+        )
+        .optional()?)
+}
+
+/// タスクの子（そのタスクから派生したポストのタスク）の数と完了数（仕様009 FR-5）
+fn children_of(conn: &Connection, task_id: i64) -> AppResult<ChildCount> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT COUNT(c.id), COALESCE(SUM(c.status = 'done'), 0)
+         FROM tasks c JOIN posts cp ON cp.id = c.post_id
+         WHERE cp.parent_task_id = ?1",
+    )?;
+    Ok(stmt.query_row([task_id], |r| {
+        Ok(ChildCount {
+            total: r.get(0)?,
+            done: r.get(1)?,
+        })
+    })?)
+}
+
+/// すべてのタスクの子の数（課題ページ用）。子の無いタスクは含まない。
+pub fn all_children(conn: &Connection) -> AppResult<HashMap<i64, ChildCount>> {
+    let mut stmt = conn.prepare(
+        "SELECT cp.parent_task_id, COUNT(c.id), COALESCE(SUM(c.status = 'done'), 0)
+         FROM tasks c JOIN posts cp ON cp.id = c.post_id
+         WHERE cp.parent_task_id IS NOT NULL
+         GROUP BY cp.parent_task_id",
+    )?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                ChildCount {
+                    total: r.get(1)?,
+                    done: r.get(2)?,
+                },
+            ))
+        })?
+        .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+    Ok(rows)
+}
+
+/// すべての派生ポストのタスクについて、元のタスク（課題ページ用）。キーは子のタスクの id。
+pub fn all_parents(conn: &Connection) -> AppResult<HashMap<i64, ParentRef>> {
+    let mut stmt = conn.prepare(
+        "SELECT c.id, pt.id, pt.title
+         FROM tasks c JOIN posts cp ON cp.id = c.post_id JOIN tasks pt ON pt.id = cp.parent_task_id",
+    )?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                ParentRef {
+                    task_id: r.get(1)?,
+                    title: r.get(2)?,
+                },
+            ))
+        })?
+        .collect::<rusqlite::Result<HashMap<_, _>>>()?;
+    Ok(rows)
+}
+
+fn parent_of(conn: &Connection, post: &Post) -> AppResult<Option<ParentRef>> {
+    let Some(task_id) = post.parent_task_id else {
+        return Ok(None);
+    };
+    Ok(conn
+        .query_row(
+            "SELECT id, title FROM tasks WHERE id = ?1",
+            [task_id],
+            |r| {
+                Ok(ParentRef {
+                    task_id: r.get(0)?,
+                    title: r.get(1)?,
+                })
+            },
+        )
+        .optional()?)
 }
 
 pub fn get_post(conn: &Connection, post_id: i64) -> AppResult<Post> {
@@ -195,9 +336,12 @@ fn tasks_of(conn: &Connection, post_id: i64) -> AppResult<Vec<Task>> {
     let mut stmt = conn.prepare_cached(&format!(
         "SELECT {TASK_COLUMNS} FROM tasks WHERE post_id = ?1 ORDER BY id"
     ))?;
-    let tasks = stmt
+    let mut tasks = stmt
         .query_map([post_id], task_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    for t in &mut tasks {
+        t.children = children_of(conn, t.id)?;
+    }
     Ok(tasks)
 }
 
@@ -237,10 +381,14 @@ fn replies_of(conn: &Connection, post_id: i64) -> AppResult<Vec<Reply>> {
 fn with_details(conn: &Connection, post: Post) -> AppResult<PostWithTasks> {
     let tasks = tasks_of(conn, post.id)?;
     let replies = replies_of(conn, post.id)?;
+    let topics = topics_of(conn, post.id)?;
+    let parent = parent_of(conn, &post)?;
     Ok(PostWithTasks {
         post,
         tasks,
         replies,
+        topics,
+        parent,
     })
 }
 
@@ -384,11 +532,208 @@ pub fn set_task_status(
     if updated == 0 {
         return Err(AppError::TaskNotFound(task_id));
     }
-    let post_id: i64 =
-        conn.query_row("SELECT post_id FROM tasks WHERE id = ?1", [task_id], |r| {
-            r.get(0)
-        })?;
+    get_post_with_tasks(conn, post_id_of_task(conn, task_id)?)
+}
+
+// ---- 話題（仕様008） ----
+
+/// ポストの付け方: AI が付けた / 人が操作した
+const ASSIGNED_BY_AI: &str = "ai";
+const ASSIGNED_BY_USER: &str = "user";
+
+fn topics_of(conn: &Connection, post_id: i64) -> AppResult<Vec<TopicRef>> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT t.id, t.name FROM post_topics pt JOIN topics t ON t.id = pt.topic_id
+         WHERE pt.post_id = ?1 AND pt.removed = 0 ORDER BY t.name",
+    )?;
+    let topics = stmt
+        .query_map([post_id], |r| {
+            Ok(TopicRef {
+                id: r.get(0)?,
+                name: r.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(topics)
+}
+
+/// 話題として投稿したポストを保存する。タスクには分類しないので、分類状態は最初から done。
+pub fn insert_topic_post(conn: &Connection, body: &str) -> AppResult<Post> {
+    conn.execute(
+        "INSERT INTO posts (body, created_at, classify_status, kind) VALUES (?1, ?2, ?3, ?4)",
+        params![body, now(), ClassifyStatus::Done, PostKind::Topic],
+    )?;
+    get_post(conn, conn.last_insert_rowid())
+}
+
+fn topic_name_taken(conn: &Connection, name: &str, except_id: Option<i64>) -> AppResult<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM topics WHERE name = ?1 AND (?2 IS NULL OR id != ?2))",
+        params![name, except_id],
+        |r| r.get(0),
+    )?)
+}
+
+/// 話題を作る。名前は検証済みのものを渡す。同じ名前があればエラー。
+pub fn create_topic(
+    conn: &Connection,
+    name: &str,
+    description: &str,
+    source_post_id: Option<i64>,
+) -> AppResult<Topic> {
+    if topic_name_taken(conn, name, None)? {
+        return Err(AppError::Validation(format!(
+            "「{name}」という話題はすでにあります"
+        )));
+    }
+    conn.execute(
+        "INSERT INTO topics (name, description, source_post_id, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![name, description, source_post_id, now()],
+    )?;
+    get_topic(conn, conn.last_insert_rowid())
+}
+
+const TOPIC_SELECT: &str = "
+    SELECT t.id, t.name, t.description, t.source_post_id, t.created_at,
+      (SELECT COUNT(*) FROM post_topics pt WHERE pt.topic_id = t.id AND pt.removed = 0),
+      (SELECT COUNT(*) FROM post_topics pt JOIN tasks k ON k.post_id = pt.post_id
+         WHERE pt.topic_id = t.id AND pt.removed = 0 AND k.status = 'open')
+    FROM topics t";
+
+fn topic_from_row(r: &Row<'_>) -> rusqlite::Result<Topic> {
+    Ok(Topic {
+        id: r.get(0)?,
+        name: r.get(1)?,
+        description: r.get(2)?,
+        source_post_id: r.get(3)?,
+        created_at: r.get(4)?,
+        post_count: r.get(5)?,
+        open_task_count: r.get(6)?,
+    })
+}
+
+pub fn get_topic(conn: &Connection, topic_id: i64) -> AppResult<Topic> {
+    conn.query_row(
+        &format!("{TOPIC_SELECT} WHERE t.id = ?1"),
+        [topic_id],
+        topic_from_row,
+    )
+    .optional()?
+    .ok_or(AppError::TopicNotFound(topic_id))
+}
+
+/// 話題の一覧（新しい順、ポスト数・未完了のタスク数つき）
+pub fn list_topics(conn: &Connection) -> AppResult<Vec<Topic>> {
+    let mut stmt = conn.prepare(&format!("{TOPIC_SELECT} ORDER BY t.id DESC"))?;
+    let topics = stmt
+        .query_map([], topic_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(topics)
+}
+
+pub fn update_topic(
+    conn: &Connection,
+    topic_id: i64,
+    name: &str,
+    description: &str,
+) -> AppResult<Topic> {
+    if topic_name_taken(conn, name, Some(topic_id))? {
+        return Err(AppError::Validation(format!(
+            "「{name}」という話題はすでにあります"
+        )));
+    }
+    let updated = conn.execute(
+        "UPDATE topics SET name = ?1, description = ?2 WHERE id = ?3",
+        params![name, description, topic_id],
+    )?;
+    if updated == 0 {
+        return Err(AppError::TopicNotFound(topic_id));
+    }
+    get_topic(conn, topic_id)
+}
+
+/// 話題を削除する。ポストとタスクは消えない（振り分けだけ消える、FR-11）
+pub fn delete_topic(conn: &Connection, topic_id: i64) -> AppResult<()> {
+    let deleted = conn.execute("DELETE FROM topics WHERE id = ?1", [topic_id])?;
+    if deleted == 0 {
+        return Err(AppError::TopicNotFound(topic_id));
+    }
+    Ok(())
+}
+
+/// 分類のときに AI に渡す話題。最近使われた順（まだ使われていない話題は新しい順）に最大 `limit` 件（NFR-1）
+pub fn topics_for_ai(conn: &Connection, limit: u32) -> AppResult<Vec<TopicBrief>> {
+    let mut stmt = conn.prepare(
+        "SELECT t.id, t.name, t.description FROM topics t
+         ORDER BY (SELECT MAX(pt.created_at) FROM post_topics pt WHERE pt.topic_id = t.id AND pt.removed = 0) DESC,
+                  t.id DESC
+         LIMIT ?1",
+    )?;
+    let topics = stmt
+        .query_map([limit], |r| {
+            Ok(TopicBrief {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                description: r.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(topics)
+}
+
+/// 分類の結果として、AI が選んだ話題をポストに付け直す。
+/// 前回 AI が付けた話題は外し、人が外した話題（removed）は付け直さない。
+pub fn set_ai_topics(conn: &mut Connection, post_id: i64, topic_ids: &[i64]) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    tx.execute(
+        "DELETE FROM post_topics WHERE post_id = ?1 AND assigned_by = ?2 AND removed = 0",
+        params![post_id, ASSIGNED_BY_AI],
+    )?;
+    let created_at = now();
+    for topic_id in topic_ids {
+        // すでに行がある（人が外した）ときは何もしない
+        tx.execute(
+            "INSERT OR IGNORE INTO post_topics (post_id, topic_id, assigned_by, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![post_id, topic_id, ASSIGNED_BY_AI, created_at],
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+/// 振り分け直し（話題を作ったとき、FR-6）で、ポストに話題を1つ足す。すでに付いている・外されたときは何もしない。
+pub fn add_ai_topic(conn: &Connection, post_id: i64, topic_id: i64) -> AppResult<bool> {
+    let inserted = conn.execute(
+        "INSERT OR IGNORE INTO post_topics (post_id, topic_id, assigned_by, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![post_id, topic_id, ASSIGNED_BY_AI, now()],
+    )?;
+    Ok(inserted > 0)
+}
+
+/// ポストから話題を外す（FR-9）。AI が付け直さないよう、行は残して removed にする。
+pub fn remove_post_topic(
+    conn: &Connection,
+    post_id: i64,
+    topic_id: i64,
+) -> AppResult<PostWithTasks> {
+    get_post(conn, post_id)?;
+    get_topic(conn, topic_id)?;
+    conn.execute(
+        "INSERT INTO post_topics (post_id, topic_id, assigned_by, removed, created_at) VALUES (?1, ?2, ?3, 1, ?4)
+         ON CONFLICT (post_id, topic_id) DO UPDATE SET removed = 1, assigned_by = ?3",
+        params![post_id, topic_id, ASSIGNED_BY_USER, now()],
+    )?;
     get_post_with_tasks(conn, post_id)
+}
+
+/// 振り分け直しの対象: 普段のポスト（話題として投稿したものを除く）の新しい順
+pub fn recent_posts_for_matching(conn: &Connection, limit: u32) -> AppResult<Vec<(i64, String)>> {
+    let mut stmt =
+        conn.prepare("SELECT id, body FROM posts WHERE kind = 'post' ORDER BY id DESC LIMIT ?1")?;
+    let posts = stmt
+        .query_map([limit], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(posts)
 }
 
 pub const INTERRUPTED_MESSAGE: &str = "アプリの終了により分類が中断されました";
@@ -581,6 +926,7 @@ mod tests {
         let conn = open_in_memory().unwrap();
         assert_eq!(user_version(&conn).unwrap(), LATEST_VERSION);
         assert!(has_column(&conn, "tasks", "completed_at"));
+        assert!(has_column(&conn, "posts", "parent_task_id"));
     }
 
     #[test]
@@ -871,5 +1217,113 @@ mod tests {
 
         drop(conn);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---- 派生ポスト（仕様009） ----
+
+    /// `parent_task_id` から派生ポストを作り、1件のタスクを付ける。子のタスクの id を返す。
+    fn derive(conn: &mut Connection, parent_task_id: i64, title: &str) -> (i64, i64) {
+        let post = insert_derived_post(conn, title, Some(parent_task_id)).unwrap();
+        replace_tasks(conn, post.id, &[task(TaskKind::Research, title)]).unwrap();
+        let child = get_post_with_tasks(conn, post.id).unwrap().tasks[0].id;
+        (post.id, child)
+    }
+
+    #[test]
+    fn derived_post_keeps_parent_and_parent_counts_children() {
+        let mut conn = open_in_memory().unwrap();
+        let (post_id, readme, ci) = post_with_two_tasks(&mut conn);
+        let (child_post, child) = derive(&mut conn, readme, "ライセンスの種類を調べる");
+
+        let derived = get_post_with_tasks(&conn, child_post).unwrap();
+        assert_eq!(derived.post.parent_task_id, Some(readme));
+        assert_eq!(
+            derived.parent,
+            Some(ParentRef {
+                task_id: readme,
+                title: "READMEを書く".into()
+            })
+        );
+        assert_eq!(parent_post_of(&conn, child_post).unwrap(), Some(post_id));
+
+        let parent = get_post_with_tasks(&conn, post_id).unwrap();
+        assert_eq!(parent.parent, None);
+        assert_eq!(parent.tasks[0].children, ChildCount { total: 1, done: 0 });
+        assert_eq!(parent.tasks[1].children, ChildCount::default());
+
+        // 子を完了にすると完了数が増える。親の状態は変わらない（Q-032）
+        set_task_status(&conn, child, TaskStatus::Done).unwrap();
+        let parent = get_post_with_tasks(&conn, post_id).unwrap();
+        assert_eq!(parent.tasks[0].children, ChildCount { total: 1, done: 1 });
+        assert_eq!(parent.tasks[0].status, TaskStatus::Open);
+
+        // 親を完了にしても子は変わらない
+        set_task_status(&conn, readme, TaskStatus::Done).unwrap();
+        let derived = get_post_with_tasks(&conn, child_post).unwrap();
+        assert_eq!(derived.tasks[0].status, TaskStatus::Done);
+        assert_eq!(
+            all_children(&conn).unwrap().get(&readme).copied(),
+            Some(ChildCount { total: 1, done: 1 })
+        );
+        assert!(!all_children(&conn).unwrap().contains_key(&ci));
+        assert_eq!(
+            all_parents(&conn).unwrap().get(&child).map(|p| p.task_id),
+            Some(readme)
+        );
+    }
+
+    #[test]
+    fn derivation_can_nest() {
+        let mut conn = open_in_memory().unwrap();
+        let (_, readme, _) = post_with_two_tasks(&mut conn);
+        let (_, child) = derive(&mut conn, readme, "ライセンスの種類を調べる");
+        let (grandchild_post, _) = derive(&mut conn, child, "MIT と Apache を比べる");
+
+        let gc = get_post_with_tasks(&conn, grandchild_post).unwrap();
+        assert_eq!(
+            gc.parent.map(|p| p.title),
+            Some("ライセンスの種類を調べる".into())
+        );
+        // 表示は直前の親だけ。孫は祖父の数に入らない
+        let parents = all_children(&conn).unwrap();
+        assert_eq!(parents[&readme], ChildCount { total: 1, done: 0 });
+        assert_eq!(parents[&child], ChildCount { total: 1, done: 0 });
+    }
+
+    #[test]
+    fn derived_post_for_missing_task_is_not_found() {
+        let conn = open_in_memory().unwrap();
+        assert!(matches!(
+            insert_derived_post(&conn, "x", Some(999)),
+            Err(AppError::TaskNotFound(999))
+        ));
+        assert!(list_timeline(&conn, 10, None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn derived_post_survives_when_parent_task_is_gone() {
+        let mut conn = open_in_memory().unwrap();
+        let (post_id, readme, _) = post_with_two_tasks(&mut conn);
+        let (child_post, _) = derive(&mut conn, readme, "ライセンスの種類を調べる");
+
+        // 分類のやり直しで元のタスクが作り直された場合（NFR-1）
+        replace_tasks(&mut conn, post_id, &[task(TaskKind::Issue, "READMEを書く")]).unwrap();
+
+        let derived = get_post_with_tasks(&conn, child_post).unwrap();
+        assert_eq!(derived.post.parent_task_id, None);
+        assert_eq!(derived.parent, None);
+        assert_eq!(derived.tasks.len(), 1);
+        assert_eq!(parent_post_of(&conn, child_post).unwrap(), None);
+        let parent = get_post_with_tasks(&conn, post_id).unwrap();
+        assert_eq!(parent.tasks[0].children, ChildCount::default());
+
+        // ポストごと消した場合も同じ
+        let (child_post2, _) = derive(&mut conn, parent.tasks[0].id, "CI の選定");
+        conn.execute("DELETE FROM posts WHERE id = ?1", [post_id])
+            .unwrap();
+        assert_eq!(
+            get_post_with_tasks(&conn, child_post2).unwrap().parent,
+            None
+        );
     }
 }

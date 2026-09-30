@@ -3,11 +3,13 @@ mod commands;
 mod config;
 mod dashboard;
 mod db;
+mod derive;
 mod error;
 mod kind;
 mod llm;
 mod models;
 mod reply;
+mod topics;
 
 use std::sync::{Arc, Mutex};
 
@@ -71,10 +73,17 @@ pub fn run() {
             commands::list_timeline,
             commands::retry_classification,
             commands::set_task_status,
+            commands::suggest_derived_tasks,
             commands::request_ai_reply,
             commands::list_kinds,
             commands::app_info,
             commands::get_task_dashboard,
+            commands::suggest_topic_name,
+            commands::create_topic,
+            commands::list_topics,
+            commands::update_topic,
+            commands::delete_topic,
+            commands::remove_post_topic,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

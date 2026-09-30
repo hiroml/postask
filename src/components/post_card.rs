@@ -3,9 +3,11 @@ use wasm_bindgen::prelude::*;
 
 use leptos::task::spawn_local;
 
+use crate::components::derive::{DeriveComposer, DeriveSuggestions};
 use crate::datetime::format_time;
 use crate::models::{
-    ClassifyStatus, KindInfo, PostWithTasks, Reply, ReplyStatus, Task, TaskStatus,
+    ChildCount, ClassifyStatus, KindInfo, PostKind, PostWithTasks, Reply, ReplyStatus, Task,
+    TaskStatus,
 };
 use crate::tauri::invoke;
 
@@ -19,10 +21,24 @@ pub fn PostCard(
     on_toggle_task: Callback<(i64, TaskStatus)>,
     /// AI にリプライを頼む（聞き直し・再試行も同じ）。引数はポスト ID
     on_ask_ai: Callback<i64>,
+    /// (ポスト ID, 話題 ID): ポストから話題を外す（仕様008 FR-9）
+    on_remove_topic: Callback<(i64, i64)>,
 ) -> impl IntoView {
     let ai_reply = item.ai_reply().cloned();
-    let PostWithTasks { post, tasks, .. } = item;
-    let post_id = post.id;
+    let is_topic_post = item.post.kind == PostKind::Topic;
+    let post_id = item.post.id;
+    let PostWithTasks {
+        post,
+        tasks,
+        topics,
+        parent,
+        ..
+    } = item;
+    let task_titles: Vec<(i64, String)> = tasks.iter().map(|t| (t.id, t.title.clone())).collect();
+    let on_open_derive = crate::store::use_timeline_store().on_open_derive;
+    let on_derive = Callback::new(move |(task_id, title): (i64, String)| {
+        on_open_derive.run((post_id, task_id, title))
+    });
 
     // 分類済みでタスクがあるポストだけ AI に聞ける（仕様003 FR-4）。
     // 生成中は出さず、失敗時はリプライ側の「再試行」があるので出さない
@@ -66,7 +82,7 @@ pub fn PostCard(
             <div class="task-chips">
                 {tasks
                     .into_iter()
-                    .map(|task| view! { <TaskChip task=task kinds=kinds on_toggle=on_toggle_task /> })
+                    .map(|task| view! { <TaskChip task=task kinds=kinds on_toggle=on_toggle_task on_derive=on_derive /> })
                     .collect_view()}
             </div>
         }
@@ -76,9 +92,33 @@ pub fn PostCard(
     view! {
         <article class="post-card">
             <div class="post-meta">{format_time(&post.created_at)}</div>
+            {is_topic_post.then(|| view! { <div class="topic-post-badge">"# 話題を作成"</div> })}
+            {parent.map(|p| view! { <p class="derived-from" title="このタスクから派生したポスト">{format!("↳ {} から", p.title)}</p> })}
             <p class="post-body">{post.body}</p>
             {status_view}
-            {ai_reply.map(|reply| view! { <AiReplyView reply=reply post_id=post_id on_ask_ai=on_ask_ai /> })}
+            <DeriveComposer post_id=post_id />
+            {(!topics.is_empty()).then(|| view! {
+                <div class="topic-chips">
+                    {topics.into_iter().map(|t| {
+                        let topic_id = t.id;
+                        view! {
+                            <span class="topic-chip">
+                                {format!("# {}", t.name)}
+                                <button
+                                    type="button"
+                                    class="topic-chip-remove"
+                                    aria-label=format!("「{}」を外す", t.name)
+                                    title="この話題を外す"
+                                    on:click=move |_| on_remove_topic.run((post_id, topic_id))
+                                >
+                                    "×"
+                                </button>
+                            </span>
+                        }
+                    }).collect_view()}
+                </div>
+            })}
+            {ai_reply.map(|reply| view! { <AiReplyView reply=reply post_id=post_id tasks=task_titles on_ask_ai=on_ask_ai /> })}
             {ask_button.map(|b| view! { <div class="ask-ai">{b}</div> })}
         </article>
     }
@@ -107,7 +147,13 @@ extern "C" {
 
 /// AI のリプライ（仕様003 FR-5, FR-6, FR-10）
 #[component]
-fn AiReplyView(reply: Reply, post_id: i64, on_ask_ai: Callback<i64>) -> impl IntoView {
+fn AiReplyView(
+    reply: Reply,
+    post_id: i64,
+    /// ポストのタスク (ID, タイトル)。関連タスクの候補の親の表示に使う（仕様009）
+    tasks: Vec<(i64, String)>,
+    on_ask_ai: Callback<i64>,
+) -> impl IntoView {
     let content = match reply.status {
         ReplyStatus::Pending => view! {
             <p class="reply-status">"🤖 AI が考え中…"</p>
@@ -160,6 +206,7 @@ fn AiReplyView(reply: Reply, post_id: i64, on_ask_ai: Callback<i64>) -> impl Int
             view! {
                 <p class="reply-body">{reply.body}</p>
                 {sources}
+                {(!tasks.is_empty()).then(|| view! { <DeriveSuggestions post_id=post_id tasks=tasks /> })}
             }
             .into_any()
         }
@@ -180,8 +227,12 @@ fn TaskChip(
     task: Task,
     kinds: RwSignal<Vec<KindInfo>>,
     on_toggle: Callback<(i64, TaskStatus)>,
+    /// (タスク ID, タイトル): このタスクから派生ポストを書く（仕様009 FR-1）
+    on_derive: Callback<(i64, String)>,
 ) -> impl IntoView {
     let task_id = task.id;
+    let children = children_badge(task.children);
+    let title_for_derive = task.title.clone();
     let status = task.status;
     let done = status == TaskStatus::Done;
     let completed_title = task
@@ -230,7 +281,47 @@ fn TaskChip(
                 </button>
                 <span class="task-chip-kind">{label.clone()}</span>
                 <span class="task-chip-title">{task.title.clone()}</span>
+                {children.clone().map(|(text, all_done, title)| view! {
+                    <span class="task-chip-children" class:all-done=all_done title=title>{text}</span>
+                })}
+                <button
+                    type="button"
+                    class="task-derive"
+                    aria-label="関連タスクを投稿"
+                    title="関連タスクを投稿"
+                    on:click={
+                        let title = title_for_derive.clone();
+                        move |_| on_derive.run((task_id, title.clone()))
+                    }
+                >
+                    "↳"
+                </button>
             </span>
         </Show>
     }
+}
+
+/// 子のあるタスクのチップに付ける表示（仕様009 FR-5, FR-8）: (文言, すべて完了か, ツールチップ)。
+/// 子が無ければ None。すべて完了したら「✓ 3/3」のように印を変える（親の完了とは連動しない。Q-033）
+pub fn children_badge(children: ChildCount) -> Option<(String, bool, String)> {
+    if children.total == 0 {
+        return None;
+    }
+    let title = format!(
+        "関連タスク {} 件のうち {} 件が完了",
+        children.total, children.done
+    );
+    Some(if children.all_done() {
+        (
+            format!("✓ {}/{}", children.done, children.total),
+            true,
+            title,
+        )
+    } else {
+        (
+            format!("↳ {}/{}", children.done, children.total),
+            false,
+            title,
+        )
+    })
 }

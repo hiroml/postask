@@ -14,6 +14,9 @@ pub enum AppError {
     #[error("タスクが見つかりません (id={0})")]
     TaskNotFound(i64),
 
+    #[error("話題が見つかりません (id={0})")]
+    TopicNotFound(i64),
+
     #[error("{0}")]
     Other(String),
 }

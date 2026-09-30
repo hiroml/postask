@@ -394,14 +394,24 @@ button {
   font-size: 0.88rem;
 }
 
+/* 種別の表示: 色の点＋濃い文字（仕様007。色が見分けにくくても文字で分かる） */
 .task-chip-kind {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--kind-color);
-  color: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #0f172a;
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.task-chip-kind::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--kind-color);
+  flex-shrink: 0;
 }
 
 .task-chip-title {
@@ -420,7 +430,7 @@ button {
   border: 2px solid var(--kind-color);
   border-radius: 50%;
   background: white;
-  color: white;
+  color: #0f172a;
   font-size: 0.7rem;
   font-weight: 700;
   line-height: 1;
@@ -439,8 +449,9 @@ button {
   opacity: 0.6;
 }
 
+/* 完了: 薄い塗り＋濃い ✓（黄・緑青の上の白い ✓ は読みにくいため、仕様007） */
 .task-chip.done .task-check {
-  background: var(--kind-color);
+  background: color-mix(in srgb, var(--kind-color) 35%, white);
 }
 
 .task-chip.done .task-chip-title {
@@ -908,5 +919,346 @@ button {
 
 /* 一覧の完了済みのチェックは塗りつぶす（ホームのチップと同じ見た目） */
 .task-table tr.done .task-check {
-  background: var(--kind-color);
+  background: color-mix(in srgb, var(--kind-color) 35%, white);
+}
+
+/* 話題（仕様008） */
+.composer-mode {
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.85rem;
+}
+
+.secondary-button {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+}
+
+.secondary-button:hover {
+  background: #f1f5f9;
+}
+
+.danger-button {
+  border: 1px solid #b91c1c;
+  border-radius: 999px;
+  background: #b91c1c;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 6px 14px;
+}
+
+.topic-dialog {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.topic-dialog-title {
+  margin: 0 0 8px;
+  font-weight: 700;
+}
+
+.topic-dialog-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.topic-dialog-field input,
+.topic-form input,
+.topic-row-edit input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.topic-dialog-desc {
+  margin: 8px 0;
+  color: #64748b;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.topic-dialog-actions,
+.topic-form-actions,
+.topic-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ポストの話題のチップ: 枠線だけ・灰色（タスクのチップと見た目を分ける） */
+.topic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.topic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px 1px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #334155;
+  font-size: 0.82rem;
+}
+
+.topic-chip-remove {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #64748b;
+  line-height: 1;
+}
+
+.topic-chip-remove:hover,
+.topic-chip-remove:focus-visible {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.topic-post-badge {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* 話題ページ */
+.topic-form {
+  display: grid;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.topic-form-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.topic-form textarea,
+.topic-row-edit textarea {
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.topic-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.topic-row {
+  padding: 14px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.topic-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.topic-row-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.topic-row-counts {
+  color: #64748b;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.topic-row-counts strong {
+  color: #0f172a;
+}
+
+.topic-row-desc {
+  margin: 4px 0 8px;
+  color: #475569;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.topic-row-edit {
+  display: grid;
+  gap: 8px;
+}
+
+/* ---- 関連タスクの派生（仕様009） ---- */
+
+/* チップの「↳」ボタン */
+.task-derive {
+  width: 20px;
+  height: 20px;
+  margin-right: -6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.task-derive:hover,
+.task-derive:focus-visible {
+  background: color-mix(in srgb, var(--kind-color) 22%, white);
+  color: #0f172a;
+}
+
+/* 子の数・完了数 */
+.task-chip-children {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.task-chip-children.all-done {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.task-table .col-title .task-chip-children {
+  margin-left: 6px;
+}
+
+/* 派生ポストの「↳ 〇〇 から」・課題ページの元のタスク */
+.derived-from,
+.task-parent {
+  margin: 0 0 2px;
+  color: #475569;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.task-parent {
+  display: block;
+}
+
+/* ポストの下の入力欄・AI の候補の欄 */
+.derive-composer,
+.derive-suggestions {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.derive-composer-title,
+.derive-suggestions-title {
+  margin: 0 0 6px;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.derive-composer textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  background: #ffffff;
+}
+
+.derive-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.derive-actions .char-count {
+  margin-right: auto;
+}
+
+.derive-suggest-button {
+  margin-top: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.85rem;
+  padding: 4px 14px;
+}
+
+.derive-suggest-button:hover {
+  background: #f1f5f9;
+}
+
+.derive-suggestions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.derive-candidate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 4px 0;
+}
+
+.derive-candidate-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.9rem;
+  background: #ffffff;
+}
+
+.derive-candidate:not(.checked) .derive-candidate-text {
+  color: #475569;
+}
+
+.derive-candidate-parent {
+  color: #64748b;
+  font-size: 0.8rem;
 }

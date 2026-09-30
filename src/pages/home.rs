@@ -17,7 +17,7 @@ pub fn HomePage() -> impl IntoView {
                 <h1>"ホーム"</h1>
             </header>
 
-            <Composer draft=store.draft on_posted=store.on_posted />
+            <Composer draft=store.draft on_posted=store.on_posted on_topic_created=store.on_topic_created />
 
             <div class="divider"></div>
 
@@ -25,23 +25,33 @@ pub fn HomePage() -> impl IntoView {
                 <p class="error-text banner">{move || load_error.get().unwrap_or_default()}</p>
             </Show>
 
-            {move || {
-                posts
-                    .get()
-                    .into_iter()
-                    .map(|item| {
-                        view! {
-                            <PostCard
-                                item=item
-                                kinds=store.kinds
-                                on_retry=store.on_retry
-                                on_toggle_task=store.on_toggle_task
-                                on_ask_ai=store.on_ask_ai
-                            />
-                        }
-                    })
-                    .collect_view()
-            }}
+            // ポストごとに作り、そのポストが変わったときだけ作り直す
+            // （他のポストの分類完了などで、開いている入力欄が消えないように。仕様009）
+            <For
+                each=move || posts.with(|l| l.iter().map(|p| p.post.id).collect::<Vec<_>>())
+                key=|id| *id
+                let:post_id
+            >
+                {
+                    let item = Memo::new(move |_| {
+                        posts.with(|l| l.iter().find(|p| p.post.id == post_id).cloned())
+                    });
+                    move || {
+                        item.get().map(|item| {
+                            view! {
+                                <PostCard
+                                    item=item
+                                    kinds=store.kinds
+                                    on_retry=store.on_retry
+                                    on_toggle_task=store.on_toggle_task
+                                    on_ask_ai=store.on_ask_ai
+                                    on_remove_topic=store.on_remove_topic
+                                />
+                            }
+                        })
+                    }
+                }
+            </For>
 
             <Show when=move || posts.with(|p| p.is_empty())>
                 <p class="empty">"まだポストがありません。思ったことを書いてみましょう。"</p>

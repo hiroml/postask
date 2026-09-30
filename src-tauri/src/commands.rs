@@ -8,11 +8,16 @@ use tauri::{AppHandle, Emitter, State};
 use crate::classify::{self, lock};
 use crate::dashboard::{self, Period, TaskDashboard};
 use crate::db;
+use crate::derive;
 use crate::error::{AppError, AppResult};
 use crate::kind::{KindInfo, TaskKind, KINDS};
 use crate::llm::LlmProvider;
-use crate::models::{validate_post_body, ClassifyStatus, Post, PostWithTasks, TaskStatus};
+use crate::models::{
+    validate_post_body, validate_topic_name, ClassifyStatus, DerivedSuggestion, Post,
+    PostWithTasks, TaskStatus, Topic, MAX_POST_CHARS,
+};
 use crate::reply;
+use crate::topics::{self, CreatedTopic};
 
 /// ポストの状態が裏の処理で変わったとき（分類・AI リプライの完了。成功・失敗とも）に送るイベント。
 /// payload は `PostWithTasks`（仕様003 で `post-classified` から改名）。
@@ -39,10 +44,28 @@ pub struct AppInfo {
     pub db_path: String,
 }
 
-fn create_post_in_db(conn: &Mutex<Connection>, body: &str) -> AppResult<Post> {
+fn create_post_in_db(
+    conn: &Mutex<Connection>,
+    body: &str,
+    parent_task_id: Option<i64>,
+) -> AppResult<Post> {
     let body = validate_post_body(body).map_err(AppError::Validation)?;
     let c = lock(conn)?;
-    db::insert_post(&c, body)
+    db::insert_derived_post(&c, body, parent_task_id)
+}
+
+/// 派生ポストなら、元のタスクのポストも知らせる（子の数・完了数が変わるため、仕様009 FR-5）
+fn emit_parent_updated(app: &AppHandle, conn: &Mutex<Connection>, post_id: i64) {
+    let parent = lock(conn).and_then(|c| {
+        db::parent_post_of(&c, post_id)?
+            .map(|id| db::get_post_with_tasks(&c, id))
+            .transpose()
+    });
+    match parent {
+        Ok(Some(p)) => emit_post_updated(app, p),
+        Ok(None) => {}
+        Err(e) => eprintln!("ポスト {post_id} の元のポストを読めませんでした: {e}"),
+    }
 }
 
 /// 裏で分類を実行し、終わったらイベントでフロントに知らせる。
@@ -51,16 +74,25 @@ fn spawn_classification(app: AppHandle, state: &AppState, post_id: i64) {
     let llm = Arc::clone(&state.llm);
     tauri::async_runtime::spawn(async move {
         match classify::classify_post(&db, llm.as_ref(), post_id).await {
-            Ok(result) => emit_post_updated(&app, result),
+            Ok(result) => {
+                emit_post_updated(&app, result);
+                emit_parent_updated(&app, &db, post_id);
+            }
             Err(e) => eprintln!("ポスト {post_id} の分類結果を保存できませんでした: {e}"),
         }
     });
 }
 
 /// ポストを保存してすぐ返す。分類は裏で始める（FR-2, FR-3）。
+/// `parent_task_id` を渡すと、そのタスクから派生したポストになる（仕様009）。無いタスクはエラー。
 #[tauri::command(rename_all = "snake_case")]
-pub fn create_post(app: AppHandle, state: State<'_, AppState>, body: String) -> AppResult<Post> {
-    let post = create_post_in_db(&state.db, &body)?;
+pub fn create_post(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    body: String,
+    parent_task_id: Option<i64>,
+) -> AppResult<Post> {
+    let post = create_post_in_db(&state.db, &body, parent_task_id)?;
     spawn_classification(app, &state, post.id);
     Ok(post)
 }
@@ -91,14 +123,28 @@ pub fn retry_classification(
 }
 
 /// タスクを完了・未完了にする（仕様002）。画面の更新用に、そのタスクを含むポスト全体を返す。
+/// 派生ポストのタスクなら、元のタスクのポストも `post-updated` で知らせる（仕様009 FR-5）。
 #[tauri::command(rename_all = "snake_case")]
 pub fn set_task_status(
+    app: AppHandle,
     state: State<'_, AppState>,
     task_id: i64,
     status: TaskStatus,
 ) -> AppResult<PostWithTasks> {
-    let c = lock(&state.db)?;
-    db::set_task_status(&c, task_id, status)
+    let result = db::set_task_status(&*lock(&state.db)?, task_id, status)?;
+    emit_parent_updated(&app, &state.db, result.post.id);
+    Ok(result)
+}
+
+/// AI リプライをもとに、関連タスクの候補を作る（仕様009 FR-1b）。投稿はしない
+#[tauri::command(rename_all = "snake_case")]
+pub async fn suggest_derived_tasks(
+    state: State<'_, AppState>,
+    post_id: i64,
+) -> AppResult<Vec<DerivedSuggestion>> {
+    let db = Arc::clone(&state.db);
+    let llm = Arc::clone(&state.llm);
+    derive::suggest(&db, llm.as_ref(), post_id).await
 }
 
 /// AI にリプライを頼む（仕様003）。聞き直し・再試行も同じ。
@@ -115,6 +161,75 @@ pub fn request_ai_reply(app: AppHandle, state: State<'_, AppState>, post_id: i64
         }
     });
     Ok(())
+}
+
+// ---- 話題（仕様008） ----
+
+/// 話題として投稿する本文から、話題の名前を提案する（FR-2）
+#[tauri::command(rename_all = "snake_case")]
+pub async fn suggest_topic_name(state: State<'_, AppState>, body: String) -> AppResult<String> {
+    let llm = Arc::clone(&state.llm);
+    topics::suggest_name(llm.as_ref(), &body).await
+}
+
+/// 話題を作る（FR-1〜FR-3）。`body` があれば「話題として投稿」、無ければ話題ページから。
+/// 作ったあと、直近のポストの振り分け直しを裏で行い、話題が付いたポストを `post-updated` で知らせる（FR-6）。
+#[tauri::command(rename_all = "snake_case")]
+pub fn create_topic(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    description: String,
+    body: Option<String>,
+) -> AppResult<CreatedTopic> {
+    let created = topics::create(&state.db, &name, &description, body.as_deref())?;
+    let topic_id = created.topic.id;
+    let db = Arc::clone(&state.db);
+    let llm = Arc::clone(&state.llm);
+    tauri::async_runtime::spawn(async move {
+        match topics::rematch(&db, llm.as_ref(), topic_id).await {
+            Ok(updated) => updated.into_iter().for_each(|p| emit_post_updated(&app, p)),
+            Err(e) => eprintln!("話題 {topic_id} の振り分け直しに失敗しました: {e}"),
+        }
+    });
+    Ok(created)
+}
+
+#[tauri::command]
+pub fn list_topics(state: State<'_, AppState>) -> AppResult<Vec<Topic>> {
+    let c = lock(&state.db)?;
+    db::list_topics(&c)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn update_topic(
+    state: State<'_, AppState>,
+    topic_id: i64,
+    name: String,
+    description: String,
+) -> AppResult<Topic> {
+    let name = validate_topic_name(&name).map_err(AppError::Validation)?;
+    let description: String = description.trim().chars().take(MAX_POST_CHARS).collect();
+    let c = lock(&state.db)?;
+    db::update_topic(&c, topic_id, name, &description)
+}
+
+/// 話題を削除する。ポストとタスクは残る（FR-11）
+#[tauri::command(rename_all = "snake_case")]
+pub fn delete_topic(state: State<'_, AppState>, topic_id: i64) -> AppResult<()> {
+    let c = lock(&state.db)?;
+    db::delete_topic(&c, topic_id)
+}
+
+/// ポストから話題を外す（FR-9）。外した話題は AI が付け直さない
+#[tauri::command(rename_all = "snake_case")]
+pub fn remove_post_topic(
+    state: State<'_, AppState>,
+    post_id: i64,
+    topic_id: i64,
+) -> AppResult<PostWithTasks> {
+    let c = lock(&state.db)?;
+    db::remove_post_topic(&c, post_id, topic_id)
 }
 
 /// 課題ページの集計（仕様006）。期間・種別・状態で絞り込む（None = すべて）。
@@ -153,7 +268,7 @@ mod tests {
     #[test]
     fn create_post_trims_and_saves_pending() {
         let conn = conn();
-        let post = create_post_in_db(&conn, "  READMEを書く  ").unwrap();
+        let post = create_post_in_db(&conn, "  READMEを書く  ", None).unwrap();
         assert_eq!(post.body, "READMEを書く");
         assert_eq!(post.classify_status, ClassifyStatus::Pending);
     }
@@ -162,17 +277,28 @@ mod tests {
     fn create_post_rejects_empty_and_too_long() {
         let conn = conn();
         assert!(matches!(
-            create_post_in_db(&conn, "   "),
+            create_post_in_db(&conn, "   ", None),
             Err(AppError::Validation(_))
         ));
         assert!(matches!(
-            create_post_in_db(&conn, &"a".repeat(MAX_POST_CHARS + 1)),
+            create_post_in_db(&conn, &"a".repeat(MAX_POST_CHARS + 1), None),
             Err(AppError::Validation(_))
         ));
-        assert!(create_post_in_db(&conn, &"a".repeat(MAX_POST_CHARS)).is_ok());
+        assert!(create_post_in_db(&conn, &"a".repeat(MAX_POST_CHARS), None).is_ok());
 
         let c = lock(&conn).unwrap();
         assert_eq!(db::list_timeline(&c, 10, None).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn create_post_with_missing_parent_task_is_rejected() {
+        let conn = conn();
+        assert!(matches!(
+            create_post_in_db(&conn, "ライセンスを調べる", Some(999)),
+            Err(AppError::TaskNotFound(999))
+        ));
+        let c = lock(&conn).unwrap();
+        assert!(db::list_timeline(&c, 10, None).unwrap().is_empty());
     }
 
     #[test]
