@@ -54,7 +54,7 @@ pub fn run() {
 
             if location.dev {
                 if let Some(window) = app.get_webview_window("main") {
-                    window.set_title("x-clone（開発版）")?;
+                    window.set_title("postask（開発版）")?;
                 }
             }
 

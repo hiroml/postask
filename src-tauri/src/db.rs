@@ -9,6 +9,8 @@ use crate::models::{
 };
 use std::collections::HashMap;
 
+/// 普段使いの DB。アプリ名を postask に変えた後も、データを引き継ぐため旧名（x-clone）のままにしている。
+/// 保存先のフォルダ（tauri.conf.json の identifier `com.hikou.x-clone`）も同じ理由で変えない
 pub const DB_FILE_NAME: &str = "x-clone.sqlite";
 /// 開発用ビルドで使う DB（仕様004）
 pub const DEV_DB_FILE_NAME: &str = "x-clone-dev.sqlite";
@@ -981,7 +983,7 @@ mod tests {
 
     impl TempDir {
         fn new(name: &str) -> Self {
-            let dir = std::env::temp_dir().join(format!("x-clone-{name}-{}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!("postask-{name}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             Self(dir)
@@ -1040,7 +1042,7 @@ mod tests {
     }
 
     /// 実際の DB の**コピー**を最新の版に上げ、データが残ることを確かめる（人の DB は触らない）。
-    /// 実行: `X_CLONE_DB_COPY=<コピーのパス> cargo test -p x-clone real_db_copy -- --ignored --nocapture`
+    /// 実行: `X_CLONE_DB_COPY=<コピーのパス> cargo test -p postask real_db_copy -- --ignored --nocapture`
     #[test]
     #[ignore = "実際の DB のコピーを使う"]
     fn real_db_copy_is_upgraded_keeping_data() {
@@ -1198,7 +1200,7 @@ mod tests {
 
     #[test]
     fn data_survives_reopen() {
-        let dir = std::env::temp_dir().join(format!("x-clone-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("postask-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(DB_FILE_NAME);
         let _ = std::fs::remove_file(&path);

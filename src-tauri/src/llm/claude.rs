@@ -826,7 +826,7 @@ mod tests {
     }
 
     /// 実際の Claude API で、仕様003 の AC-1（検索付き・出典あり）と AC-2（検索なし）の例を試す（料金がかかる）。
-    /// 実行: `cargo test -p x-clone live_reply -- --ignored --nocapture`
+    /// 実行: `cargo test -p postask live_reply -- --ignored --nocapture`
     #[tokio::test]
     #[ignore = "Claude API と Web 検索を実際に呼ぶ"]
     async fn live_reply_examples() {
@@ -934,7 +934,7 @@ mod tests {
     #[test]
     fn classify_with_topics_lists_them_and_requires_topic_ids() {
         let p = provider("claude-haiku-4-5", Some("k"));
-        let body = p.classify_body("x", &[topic(7, "x-clone の開発", "Tauri のアプリ")]);
+        let body = p.classify_body("x", &[topic(7, "postask の開発", "Tauri のアプリ")]);
         let schema = &body["output_config"]["format"]["schema"];
         assert_eq!(
             schema["properties"]["topic_ids"]["items"]["type"],
@@ -944,7 +944,7 @@ mod tests {
         assert!(body["system"]
             .as_str()
             .unwrap()
-            .contains("- id 7: x-clone の開発 — Tauri のアプリ"));
+            .contains("- id 7: postask の開発 — Tauri のアプリ"));
     }
 
     #[test]
@@ -1011,7 +1011,7 @@ mod tests {
     }
 
     /// 実際の Claude API で、仕様009 の AC-7 の例（関連タスクの候補）を試す（料金がかかる）。
-    /// 実行: `cargo test -p x-clone live_derive -- --ignored --nocapture`
+    /// 実行: `cargo test -p postask live_derive -- --ignored --nocapture`
     #[tokio::test]
     #[ignore = "Claude API を実際に呼ぶ"]
     async fn live_derive_examples() {
@@ -1060,7 +1060,7 @@ mod tests {
     }
 
     /// 実際の Claude API で、仕様008 の AC-1〜AC-3 の例（話題の名前の提案・振り分け・関係ないポスト）を試す（料金がかかる）。
-    /// 実行: `cargo test -p x-clone live_topics -- --ignored --nocapture`
+    /// 実行: `cargo test -p postask live_topics -- --ignored --nocapture`
     #[tokio::test]
     #[ignore = "Claude API を実際に呼ぶ"]
     async fn live_topics_examples() {
@@ -1071,13 +1071,13 @@ mod tests {
         );
         let p = ClaudeProvider::new(&config).unwrap();
 
-        let body = "x-clone の開発: Tauri と Leptos で作る、ポストするだけで課題が整理されるタスク管理アプリ";
+        let body = "postask の開発: Tauri と Leptos で作る、ポストするだけで課題が整理されるタスク管理アプリ";
         let name = p.suggest_topic_name(body).await.expect("名前の提案に失敗");
         println!("提案された名前: {name}");
         assert!(!name.trim().is_empty());
 
         let topics = [
-            topic(1, "x-clone の開発", body),
+            topic(1, "postask の開発", body),
             topic(2, "家事", "掃除・洗濯・買い物など家のこと"),
         ];
         let cases: &[(&str, &[i64])] = &[
@@ -1111,7 +1111,7 @@ mod tests {
             .match_posts_to_topic(&topics[0], &posts)
             .await
             .expect("振り分け直しに失敗");
-        println!("振り分け直し（x-clone の開発）: {matched:?}");
+        println!("振り分け直し（postask の開発）: {matched:?}");
         if !matched.contains(&102) || matched.contains(&103) {
             failures.push(format!("振り分け直し: {matched:?}"));
         }
@@ -1186,7 +1186,7 @@ mod tests {
     }
 
     /// 実際の Claude API で受け入れ条件 AC-1〜AC-5 の例を分類する（料金がかかる）。
-    /// 実行: `cargo test -p x-clone live_ -- --ignored --nocapture`
+    /// 実行: `cargo test -p postask live_ -- --ignored --nocapture`
     #[tokio::test]
     #[ignore = "Claude API を実際に呼ぶ"]
     async fn live_acceptance_examples() {

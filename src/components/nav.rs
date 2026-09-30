@@ -62,7 +62,7 @@ pub fn Nav() -> impl IntoView {
     view! {
         <nav class="nav" aria-label="メニュー">
             <div class="nav-brand">
-                <span class="nav-brand-name">"x-clone"</span>
+                <span class="nav-brand-name">"postask"</span>
                 <Show when=move || store.is_dev.get()>
                     <span class="dev-badge" title="開発用の DB（x-clone-dev.sqlite）を使っています">
                         "開発版"

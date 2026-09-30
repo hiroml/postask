@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "x-clone",
+  "productName": "postask",
   "version": "0.1.0",
   "identifier": "com.hikou.x-clone",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "x-clone",
+        "title": "postask",
         "width": 1100,
         "height": 760,
         "minWidth": 720,

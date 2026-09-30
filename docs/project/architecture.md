@@ -85,6 +85,8 @@ flowchart LR
 
 ## DB ファイル（仕様004）
 
+アプリ名は postask だが、データを引き継ぐため、保存先のフォルダ（identifier `com.hikou.x-clone`）・DB ファイル名・環境変数 `X_CLONE_DB` は旧名 x-clone のまま（2026-09-30 に改名）。
+
 | ビルド | ファイル | 備考 |
 | --- | --- | --- |
 | 開発用（`cargo tauri dev`） | `%APPDATA%\com.hikou.x-clone\x-clone-dev.sqlite` | 無ければ普段使いの DB を読み取り専用でコピーして作る。画面・タイトルに「開発版」 |

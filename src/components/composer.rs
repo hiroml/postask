@@ -144,7 +144,7 @@ pub fn Composer(
             <textarea
                 placeholder=move || match mode.get() {
                     Mode::Post => "いま何してる？ 何が気になる？",
-                    Mode::Topic => "話題の概要を書く（例: x-clone の開発: Tauri と Leptos で作るタスク管理アプリ）",
+                    Mode::Topic => "話題の概要を書く（例: postask の開発: Tauri と Leptos で作るタスク管理アプリ）",
                 }
                 prop:value=move || draft.get()
                 on:input=move |ev| draft.set(event_target_value(&ev))

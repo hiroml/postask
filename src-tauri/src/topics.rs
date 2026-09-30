@@ -155,14 +155,14 @@ mod tests {
         let conn = conn();
         let created = create(
             &conn,
-            " x-clone の開発 ",
+            " postask の開発 ",
             "",
-            Some("x-clone の開発: Tauri と Leptos"),
+            Some("postask の開発: Tauri と Leptos"),
         )
         .unwrap();
 
-        assert_eq!(created.topic.name, "x-clone の開発");
-        assert_eq!(created.topic.description, "x-clone の開発: Tauri と Leptos");
+        assert_eq!(created.topic.name, "postask の開発");
+        assert_eq!(created.topic.description, "postask の開発: Tauri と Leptos");
         let post = created.post.unwrap();
         assert_eq!(post.post.kind, PostKind::Topic);
         assert_eq!(created.topic.source_post_id, Some(post.post.id));
@@ -242,7 +242,7 @@ mod tests {
     #[tokio::test]
     async fn removed_topic_is_not_reassigned_on_reclassification() {
         let conn = conn();
-        let topic = create(&conn, "x-clone の開発", "", None).unwrap().topic;
+        let topic = create(&conn, "postask の開発", "", None).unwrap().topic;
         let id = post(&conn, "ナビゲーターのページを増やす");
         let provider =
             MockProvider::tasks(vec![issue("ページを増やす")]).with_topic_ids(vec![topic.id]);
@@ -274,7 +274,7 @@ mod tests {
         let conn = conn();
         let a = post(&conn, "ナビゲーターのページを増やす");
         let b = post(&conn, "牛乳を買う");
-        let topic = create(&conn, "x-clone の開発", "", Some("x-clone の開発")).unwrap();
+        let topic = create(&conn, "postask の開発", "", Some("postask の開発")).unwrap();
         // 話題として投稿したポストや知らない id を返しても付けない
         let provider = MockProvider::failing().with_matches(vec![
             a,
@@ -297,8 +297,8 @@ mod tests {
     #[test]
     fn long_name_drops_parenthetical_first() {
         assert_eq!(
-            shorten_topic_name("x-clone の開発（Tauri と Leptos）"),
-            "x-clone の開発"
+            shorten_topic_name("postask の開発（Tauri と Leptos）"),
+            "postask の開発"
         );
         assert_eq!(shorten_topic_name("  家事  "), "家事");
         assert_eq!(
@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn topic_counts_and_delete_keeps_posts() {
         let conn = conn();
-        let topic = create(&conn, "x-clone の開発", "", None).unwrap().topic;
+        let topic = create(&conn, "postask の開発", "", None).unwrap().topic;
         let id = post(&conn, "READMEを書く");
         {
             let mut c = lock(&conn).unwrap();
